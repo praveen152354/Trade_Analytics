@@ -201,8 +201,8 @@ def build():
         doc,
         ["Item", "Value"],
         [
-            ["Account URL", "omlvpas-dd77972.snowflakecomputing.com"],
-            ["Organization / Account name", "OMLVPAS / DD77972"],
+            ["Account URL", "<your-org>-<your-account>.snowflakecomputing.com"],
+            ["Organization / Account name", "set in your local .env (SNOWFLAKE_ORGANIZATION_NAME / SNOWFLAKE_ACCOUNT_NAME)"],
             ["Database", "TRADE_ANALYTICS"],
             ["Warehouse", "TRADE_ANALYTICS_WH"],
             ["Loader role", "TRADE_ANALYTICS_LOADER"],
@@ -211,9 +211,9 @@ def build():
         col_widths=[3, 4],
     )
     doc.add_paragraph(
-        "Credentials are never stored in this document or in the repository — "
-        "they live only in the local, git-ignored .env file. See "
-        "docs/SETUP_GUIDE.md for how to populate it."
+        "Account identifiers and credentials are never stored in this document "
+        "or in the repository — they live only in the local, git-ignored .env "
+        "file. See docs/SETUP_GUIDE.md for how to populate it."
     )
 
     doc.save("Trade_Analytics_Summary.docx")
