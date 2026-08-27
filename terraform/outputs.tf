@@ -15,7 +15,7 @@ output "transformer_role" {
 }
 
 output "raw_stage" {
-  value = snowflake_stage_internal.trades_stage.fully_qualified_name
+  value = snowflake_stage.trades_stage.fully_qualified_name
 }
 
 output "raw_stream" {
