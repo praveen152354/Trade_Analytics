@@ -1,0 +1,71 @@
+@startuml architecture
+skinparam componentStyle rectangle
+skinparam backgroundColor white
+
+actor "Airflow Scheduler" as AF
+
+package "Ingestion" {
+  component "generate_trades.py\n(mock trade feed)" as GEN
+  component "load_to_snowflake.py\n(PUT + COPY INTO)" as LOAD
+}
+
+package "Snowflake" {
+  database "RAW schema" {
+    [TRADES_STAGE\n(internal stage)] as STAGE
+    [TRADES_RAW\n(landing table)] as RAWTBL
+    [TRADES_RAW_STREAM\n(CDC stream)] as STREAM
+  }
+
+  database "STAGING / INTERMEDIATE (dbt)" {
+    [stg_trades] as STG
+    [int_trades_evaluated\n(business rules)] as EVAL
+  }
+
+  database "ANALYTICS (dbt marts)" {
+    [valid_trades] as VALID
+    [rejected_trades\n(audit log)] as REJ
+    [trade_status\n(view: ACTIVE/EXPIRED)] as STATUS
+  }
+
+  [ACCOUNT_USAGE / INFORMATION_SCHEMA\n(QUERY_HISTORY, COPY_HISTORY,\nTASK_HISTORY, WAREHOUSE_METERING)] as ADMIN
+}
+
+package "Orchestration" {
+  [dbt run / dbt test] as DBT
+}
+
+package "Optional" {
+  [Streamlit dashboard] as DASH
+}
+
+AF --> GEN : schedule (every 30 min)
+GEN --> LOAD : writes .jsonl batch
+LOAD --> STAGE : PUT file
+STAGE --> RAWTBL : COPY INTO
+RAWTBL ..> STREAM : change capture
+AF --> DBT
+STREAM --> STG : consumed by\nincremental model
+STG --> EVAL : version/maturity rules
+EVAL --> VALID : ACCEPTED
+EVAL --> REJ : REJECTED (+ reason)
+VALID --> STATUS : computed status
+DBT --> STG
+DBT --> EVAL
+DBT --> VALID
+DBT --> REJ
+DBT --> STATUS
+
+STATUS --> DASH
+REJ --> DASH
+
+RAWTBL -[hidden]-> ADMIN
+AF ..> ADMIN : monitoring queries\n+ Snowflake Alerts
+
+note right of AF
+  On task failure: Airflow emails
+  ALERT_EMAIL_TO (SMTP) and the
+  DAG run/task shows failed in
+  the Airflow UI + retries twice.
+end note
+
+@enduml

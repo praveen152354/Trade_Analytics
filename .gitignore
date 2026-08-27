@@ -1,0 +1,35 @@
+# Secrets
+.env
+orchestration/airflow/.env
+terraform.tfvars
+*.pem
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# dbt
+dbt/trade_analytics/target/
+dbt/trade_analytics/dbt_packages/
+dbt/trade_analytics/logs/
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/.terraform.lock.hcl
+terraform/crash.log
+
+# Generated trade data
+data_generator/output/*.jsonl
+
+# Airflow
+orchestration/airflow/logs/
+orchestration/airflow/plugins/
+
+# Editors / OS
+.vscode/
+.DS_Store
+Thumbs.db

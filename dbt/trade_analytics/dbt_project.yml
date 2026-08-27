@@ -1,0 +1,30 @@
+name: 'trade_analytics'
+version: '1.0.0'
+config-version: 2
+
+profile: 'trade_analytics'
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  trade_analytics:
+    staging:
+      +materialized: incremental
+      +schema: staging
+    intermediate:
+      +materialized: incremental
+      +schema: intermediate
+    marts:
+      +schema: analytics
+
+vars:
+  # Earliest timestamp used to seed incremental watermark comparisons.
+  epoch_timestamp: '1900-01-01 00:00:00 +0000'

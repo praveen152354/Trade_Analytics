@@ -1,0 +1,12 @@
+# Credentials are NOT set here. The provider reads them from environment
+# variables at plan/apply time:
+#   SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, SNOWFLAKE_PASSWORD (or
+#   SNOWFLAKE_PRIVATE_KEY / SNOWFLAKE_PRIVATE_KEY_PATH for key-pair auth),
+#   SNOWFLAKE_ROLE (should be a role with rights to create databases,
+#   warehouses and roles — ACCOUNTADMIN or SYSADMIN+SECURITYADMIN on a trial
+#   account).
+# See ../.env.example.
+
+provider "snowflake" {
+  role = var.bootstrap_role
+}

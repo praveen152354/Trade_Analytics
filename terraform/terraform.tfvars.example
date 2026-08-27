@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars (git-ignored) and fill in.
+grantee_user = "YOUR_SNOWFLAKE_USERNAME"
+
+# Uncomment to override defaults:
+# database_name  = "TRADE_ANALYTICS"
+# warehouse_name = "TRADE_ANALYTICS_WH"
+# warehouse_size = "XSMALL"

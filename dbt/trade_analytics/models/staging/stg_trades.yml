@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: stg_trades
+    description: Flattened, typed view of every raw trade message drained from the stream.
+    columns:
+      - name: message_id
+        description: Unique id of the inbound message (not the trade).
+        data_tests:
+          - not_null
+          - unique
+      - name: trade_id
+        data_tests:
+          - not_null
+      - name: version
+        data_tests:
+          - not_null
+      - name: maturity_date
+        data_tests:
+          - not_null

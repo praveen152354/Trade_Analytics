@@ -1,0 +1,47 @@
+version: 2
+
+models:
+  - name: valid_trades
+    description: One row per trade_id — the latest accepted version.
+    columns:
+      - name: trade_id
+        data_tests:
+          - not_null
+          - unique
+      - name: version
+        data_tests:
+          - not_null
+      - name: maturity_date
+        data_tests:
+          - not_null
+
+  - name: rejected_trades
+    description: Append-only audit log of every rejected trade message.
+    columns:
+      - name: message_id
+        data_tests:
+          - not_null
+          - unique
+      - name: reject_reason
+        data_tests:
+          - not_null
+          - accepted_values:
+              values:
+                - MATURITY_DATE_IN_PAST
+                - STALE_VERSION_LOWER_THAN_EXISTING
+                - SUPERSEDED_IN_BATCH
+
+  - name: trade_status
+    description: valid_trades with a dynamically computed ACTIVE/EXPIRED status.
+    columns:
+      - name: trade_id
+        data_tests:
+          - not_null
+          - unique
+      - name: trade_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              values:
+                - ACTIVE
+                - EXPIRED

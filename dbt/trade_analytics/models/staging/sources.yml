@@ -1,0 +1,25 @@
+version: 2
+
+sources:
+  - name: raw
+    database: "{{ target.database }}"
+    schema: RAW
+    tables:
+      - name: trades_raw
+        description: >
+          Landing table for raw trade messages copied in from the internal
+          stage. Insert-only; one row per file record loaded.
+        columns:
+          - name: raw_payload
+            description: Full trade message as a VARIANT (JSON).
+          - name: file_name
+            description: Source file the record was copied from.
+          - name: loaded_at
+            description: Timestamp the row was copied into Snowflake.
+
+      - name: trades_raw_stream
+        description: >
+          Standard Snowflake stream on RAW.TRADES_RAW. Selecting from it
+          inside a dbt incremental model's merge/insert statement consumes
+          it and advances its offset — this is the "Snowflake feature" used
+          to consume newly-arrived trades (see stg_trades.sql).

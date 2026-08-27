@@ -1,0 +1,75 @@
+name: dbt CI/CD
+
+on:
+  pull_request:
+    paths: ["dbt/**"]
+  push:
+    branches: [main]
+    paths: ["dbt/**"]
+
+env:
+  DBT_PROFILES_DIR: ${{ github.workspace }}/dbt/trade_analytics
+  SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+  SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+  SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+  SNOWFLAKE_TRANSFORMER_ROLE: ${{ secrets.SNOWFLAKE_TRANSFORMER_ROLE }}
+  SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+  SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+  SNOWFLAKE_TRANSFORM_SCHEMA: CI
+
+jobs:
+  validate:
+    name: dbt build (validate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dbt
+        run: pip install dbt-core==1.8.4 dbt-snowflake==1.8.3
+
+      - name: dbt deps
+        working-directory: dbt/trade_analytics
+        run: dbt deps
+
+      - name: dbt parse (catches syntax/ref errors without hitting the warehouse)
+        working-directory: dbt/trade_analytics
+        run: dbt parse
+
+      - name: dbt build (PR only — builds into an isolated CI schema, then tests)
+        if: github.event_name == 'pull_request'
+        working-directory: dbt/trade_analytics
+        run: dbt build --target dev --full-refresh
+
+  deploy:
+    name: dbt run + test (main)
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      SNOWFLAKE_TRANSFORM_SCHEMA: ${{ secrets.SNOWFLAKE_TRANSFORM_SCHEMA }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dbt
+        run: pip install dbt-core==1.8.4 dbt-snowflake==1.8.3
+
+      - name: dbt deps
+        working-directory: dbt/trade_analytics
+        run: dbt deps
+
+      - name: dbt run
+        working-directory: dbt/trade_analytics
+        run: dbt run --target dev
+
+      - name: dbt test
+        working-directory: dbt/trade_analytics
+        run: dbt test --target dev
