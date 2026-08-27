@@ -23,7 +23,7 @@ stg_trades  ->  int_trades_evaluated  ->  valid_trades
 ```
 
 - **`stg_trades`** (incremental, append) — flattens the raw JSON `VARIANT`
-  into typed columns. Selects from `RAW.TRADES_RAW_STREAM`, a standard
+  into typed columns. Selects from `BRONZE.TRADES_RAW_STREAM`, a standard
   Snowflake **stream** on the landing table. Reading a stream inside the
   final `INSERT`/`MERGE` statement of a transaction is what *consumes* it in
   Snowflake and advances its offset — this is the "Snowflake feature" used
@@ -37,8 +37,30 @@ stg_trades  ->  int_trades_evaluated  ->  valid_trades
   one row per trade.
 - **`rejected_trades`** (incremental, append) — the compliance audit log.
 - **`trade_status`** (view) — `valid_trades` plus the computed
-  ACTIVE/EXPIRED column; this is what the dashboard and any downstream
-  reporting should query.
+  ACTIVE/EXPIRED column and `notional_usd` (via `convert_to_usd()`); this is
+  what the dashboard and any downstream reporting should query.
+- **`valid_trades_snapshot`** (dbt snapshot, `check` strategy, Type 2 SCD) —
+  a point-in-time history of `valid_trades`. Unlike the models above it
+  isn't part of the hourly `dbt run`; it's invoked separately (`dbt
+  snapshot`) on a month-end schedule, since its purpose is capturing
+  end-of-month positions for compliance/reporting, not tracking every
+  intra-day change. See `snapshots/valid_trades_snapshot.sql`.
+
+## The currency-conversion macro
+
+`macros/convert_to_usd.sql` takes an amount column and a currency column and
+returns a `CASE` expression converting to USD, built by looping over the
+`fx_rates_to_usd` var in `dbt_project.yml`:
+
+```sql
+{{ convert_to_usd('notional', 'currency') }} as notional_usd
+```
+
+The macro is the payoff of moving repeated logic out of hand-written SQL:
+the FX table lives in exactly one place (`dbt_project.yml`), every call site
+stays in sync automatically, and adding a seventh currency is a one-line
+var change rather than finding and editing every `CASE` statement that
+happens to convert currency.
 
 ## Tech stack choices
 

@@ -5,7 +5,7 @@
 # stage on a configurable interval and COPY INTOs whatever it finds. dbt
 # run/test is scheduled separately, via dbt Cloud's own job scheduler.
 #
-# RAW.GENERATE_TRADE_FILES itself is NOT defined here as a
+# BRONZE.GENERATE_TRADE_FILES itself is NOT defined here as a
 # snowflake_procedure_python resource: the installed provider (v1.2.3) has a
 # read-back bug for Python procedure objects that reproduces regardless of
 # HCL config ("could not parse package from Snowflake, expected at least
@@ -15,17 +15,17 @@
 
 resource "snowflake_task" "generate_trade_files_task" {
   database  = snowflake_database.trade_analytics.name
-  schema    = "RAW"
+  schema    = "BRONZE"
   name      = "GENERATE_TRADE_FILES_TASK"
   warehouse = snowflake_warehouse.trade_analytics_wh.name
   started   = true
-  comment   = "Writes a new mock trade batch file to RAW.TRADES_STAGE on a schedule."
+  comment   = "Writes a new mock trade batch file to BRONZE.TRADES_STAGE on a schedule."
 
   schedule {
     minutes = var.trade_generation_schedule_minutes
   }
 
-  sql_statement = "CALL RAW.GENERATE_TRADE_FILES(${var.trades_per_generation})"
+  sql_statement = "CALL BRONZE.GENERATE_TRADE_FILES(${var.trades_per_generation})"
 
   suspend_task_after_num_failures = 3
   task_auto_retry_attempts        = 2
@@ -40,23 +40,23 @@ resource "snowflake_task" "generate_trade_files_task" {
 
 resource "snowflake_task" "ingest_trades_task" {
   database  = snowflake_database.trade_analytics.name
-  schema    = "RAW"
+  schema    = "BRONZE"
   name      = "INGEST_TRADES_TASK"
   warehouse = snowflake_warehouse.trade_analytics_wh.name
   started   = true
-  comment   = "Polls RAW.TRADES_STAGE and COPY INTOs any new files. Runs on its own cadence, independent of generation."
+  comment   = "Polls BRONZE.TRADES_STAGE and COPY INTOs any new files. Runs on its own cadence, independent of generation."
 
   schedule {
     minutes = var.ingestion_schedule_minutes
   }
 
   sql_statement = <<-SQL
-    COPY INTO RAW.TRADES_RAW (raw_payload, file_name, loaded_at)
+    COPY INTO BRONZE.TRADES_RAW (raw_payload, file_name, loaded_at)
     FROM (
         SELECT $1, METADATA$FILENAME, CURRENT_TIMESTAMP()
-        FROM @RAW.TRADES_STAGE
+        FROM @BRONZE.TRADES_STAGE
     )
-    FILE_FORMAT = (FORMAT_NAME = 'RAW.TRADE_JSON_FORMAT')
+    FILE_FORMAT = (FORMAT_NAME = 'BRONZE.TRADE_JSON_FORMAT')
     ON_ERROR = 'SKIP_FILE'
     PURGE = TRUE
   SQL
@@ -83,7 +83,7 @@ resource "snowflake_alert" "task_failure_alert" {
   count = var.alert_email != "" ? 1 : 0
 
   database  = snowflake_database.trade_analytics.name
-  schema    = "RAW"
+  schema    = "BRONZE"
   name      = "TASK_FAILURE_ALERT"
   warehouse = snowflake_warehouse.trade_analytics_wh.name
   enabled   = true

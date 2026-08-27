@@ -1,6 +1,6 @@
 """
 Optional visualization layer: trade status breakdown (active/expired/rejected)
-read straight from the ANALYTICS marts. Run with:
+read straight from the GOLD marts. Run with:
 
     streamlit run dashboard/streamlit_app.py
 """
@@ -28,7 +28,7 @@ def get_connection():
         role=os.environ.get("SNOWFLAKE_TRANSFORMER_ROLE", "TRADE_ANALYTICS_TRANSFORMER"),
         warehouse=os.environ.get("SNOWFLAKE_WAREHOUSE", "TRADE_ANALYTICS_WH"),
         database=os.environ.get("SNOWFLAKE_DATABASE", "TRADE_ANALYTICS"),
-        schema=os.environ.get("SNOWFLAKE_TRANSFORM_SCHEMA", "ANALYTICS"),
+        schema=os.environ.get("SNOWFLAKE_TRANSFORM_SCHEMA", "GOLD"),
     )
 
 

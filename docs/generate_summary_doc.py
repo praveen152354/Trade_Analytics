@@ -85,8 +85,10 @@ def build():
     add_h2(doc, "1. Snowflake objects created (via Terraform + one SQL script)")
     doc.add_paragraph(
         "All objects below were provisioned by terraform apply against the live "
-        "trial account (database TRADE_ANALYTICS). One object, "
-        "RAW.GENERATE_TRADE_FILES, is deployed by a plain SQL script instead of a "
+        "trial account (database TRADE_ANALYTICS), organized as a medallion "
+        "architecture: BRONZE (raw landing) -> SILVER (staging + business-rule "
+        "evaluation) -> GOLD (marts + Type 2 SCD snapshot). One object, "
+        "BRONZE.GENERATE_TRADE_FILES, is deployed by a plain SQL script instead of a "
         "snowflake_procedure_python resource -- the installed provider version has "
         "a read-back bug for that resource type (see the file header in "
         "terraform/sql/generate_trade_files_procedure.sql). Everything else is "
@@ -99,21 +101,20 @@ def build():
         [
             ["TRADE_ANALYTICS_WH", "Warehouse", "—", "XSMALL, auto-suspend 60s. Compute for ingestion and dbt."],
             ["TRADE_ANALYTICS", "Database", "—", "Top-level container for the whole pipeline."],
-            ["RAW", "Schema", "TRADE_ANALYTICS", "Landing zone: raw trade files, stage, stream, tasks."],
-            ["STAGING", "Schema", "TRADE_ANALYTICS", "dbt staging models (stg_trades)."],
-            ["INTERMEDIATE", "Schema", "TRADE_ANALYTICS", "dbt business-rule evaluation (int_trades_evaluated)."],
-            ["ANALYTICS", "Schema", "TRADE_ANALYTICS", "dbt marts: valid_trades, rejected_trades, trade_status."],
+            ["BRONZE", "Schema", "TRADE_ANALYTICS", "Landing zone: raw trade files, stage, stream, tasks."],
+            ["SILVER", "Schema", "TRADE_ANALYTICS", "dbt staging + business-rule evaluation (stg_trades, int_trades_evaluated)."],
+            ["GOLD", "Schema", "TRADE_ANALYTICS", "dbt marts (valid_trades, rejected_trades, trade_status) + Type 2 SCD snapshot."],
             ["TRADE_ANALYTICS_LOADER", "Role", "—", "Used by the standalone Python dev/test script (PUT + COPY INTO)."],
             ["TRADE_ANALYTICS_TRANSFORMER", "Role", "—", "Used by dbt (via dbt Cloud) to build every model."],
-            ["TRADE_JSON_FORMAT", "File format", "RAW", "JSON, one object per line, used by COPY INTO."],
-            ["TRADES_STAGE", "Internal stage", "RAW", "Trade batch files land here (genuine cloud object storage, Snowflake-managed)."],
-            ["TRADES_RAW", "Table", "RAW", "Insert-only landing table (raw_payload VARIANT, file_name, loaded_at)."],
-            ["TRADES_RAW_STREAM", "Stream", "RAW", "CDC stream on TRADES_RAW; consumed by dbt's stg_trades model."],
-            ["GENERATE_TRADE_FILES", "Procedure (Snowpark Python)", "RAW", "Generates a mock trade batch, writes it as .jsonl straight to the stage."],
-            ["GENERATE_TRADE_FILES_TASK", "Task", "RAW", "Calls the procedure every 2 min (configurable). Auto-retries 2x on failure."],
-            ["INGEST_TRADES_TASK", "Task", "RAW", "COPY INTOs new stage files every 5 min (configurable). Independent schedule from generation."],
+            ["TRADE_JSON_FORMAT", "File format", "BRONZE", "JSON, one object per line, used by COPY INTO."],
+            ["TRADES_STAGE", "Internal stage", "BRONZE", "Trade batch files land here (genuine cloud object storage, Snowflake-managed)."],
+            ["TRADES_RAW", "Table", "BRONZE", "Insert-only landing table (raw_payload VARIANT, file_name, loaded_at)."],
+            ["TRADES_RAW_STREAM", "Stream", "BRONZE", "CDC stream on TRADES_RAW; consumed by dbt's stg_trades model."],
+            ["GENERATE_TRADE_FILES", "Procedure (Snowpark Python)", "BRONZE", "Generates a mock trade batch, writes it as .jsonl straight to the stage."],
+            ["GENERATE_TRADE_FILES_TASK", "Task", "BRONZE", "Calls the procedure every 2 min (configurable). Auto-retries 2x on failure."],
+            ["INGEST_TRADES_TASK", "Task", "BRONZE", "COPY INTOs new stage files every 5 min (configurable). Independent schedule from generation."],
             ["TRADE_PIPELINE_ALERT", "Email notification integration", "—", "Lets Snowflake send email for the alert below."],
-            ["TASK_FAILURE_ALERT", "Alert", "RAW", "Every 15 min, emails if either task failed in TASK_HISTORY."],
+            ["TASK_FAILURE_ALERT", "Alert", "BRONZE", "Every 15 min, emails if either task failed in TASK_HISTORY."],
         ],
         col_widths=[1.7, 1.5, 1.0, 3.2],
     )
@@ -121,8 +122,8 @@ def build():
     doc.add_paragraph(
         "Both roles are granted to the account user PRAVEENMS91 and given USAGE on "
         "the warehouse/database. The transformer role additionally gets "
-        "CREATE TABLE / CREATE VIEW on STAGING, INTERMEDIATE and ANALYTICS, and "
-        "SELECT on all present-and-future tables/streams in RAW. The loader role "
+        "CREATE TABLE / CREATE VIEW on SILVER and GOLD, and "
+        "SELECT on all present-and-future tables/streams in BRONZE. The loader role "
         "is scoped narrowly to INSERT/SELECT on TRADES_RAW and READ/WRITE on "
         "TRADES_STAGE only. A Task's own ERROR_INTEGRATION property only accepts "
         "cloud-messaging integrations (SNS/Pub-Sub/Event Grid), not EMAIL, which "
@@ -137,13 +138,14 @@ def build():
         doc,
         ["Model", "Materialization", "What it does"],
         [
-            ["stg_trades", "incremental (append)", "Flattens raw JSON from the stream into typed columns."],
-            ["int_trades_evaluated", "incremental (append)", "Single decision point: accepts or rejects each trade message and records why."],
-            ["valid_trades", "incremental (merge on trade_id)", "One row per trade_id — the latest accepted version."],
-            ["rejected_trades", "incremental (append)", "Compliance audit log of every rejected message + reason."],
-            ["trade_status", "view", "valid_trades + a computed ACTIVE/EXPIRED column."],
+            ["stg_trades (SILVER)", "incremental (append)", "Flattens raw JSON from the stream into typed columns."],
+            ["int_trades_evaluated (SILVER)", "incremental (append)", "Single decision point: accepts or rejects each trade message and records why."],
+            ["valid_trades (GOLD)", "incremental (merge on trade_id)", "One row per trade_id — the latest accepted version."],
+            ["rejected_trades (GOLD)", "incremental (append)", "Compliance audit log of every rejected message + reason."],
+            ["trade_status (GOLD)", "view", "valid_trades + computed ACTIVE/EXPIRED + notional_usd (convert_to_usd macro)."],
+            ["valid_trades_snapshot (GOLD)", "snapshot, check strategy", "Type 2 SCD history of valid_trades. Run monthly (1st, 01:00 UTC), not on the hourly job."],
         ],
-        col_widths=[1.6, 1.8, 3.6],
+        col_widths=[1.9, 1.8, 3.3],
     )
 
     add_table(
@@ -171,14 +173,17 @@ def build():
             ["data_generator/generate_trades.py + load_to_snowflake.py", "Standalone dev/test path (PUT + COPY INTO from a local machine) -- not part of the scheduled production flow."],
             ["terraform/*.tf", "IaC for every Snowflake object listed in section 1, including the Tasks and Alert."],
             ["terraform/sql/generate_trade_files_procedure.sql", "The one object deployed outside Terraform -- see section 1."],
-            ["dbt/trade_analytics/models/staging/stg_trades.sql", "Consumes the RAW stream, flattens VARIANT to columns."],
-            ["dbt/trade_analytics/models/intermediate/int_trades_evaluated.sql", "All business-rule logic (accept/reject + reason)."],
-            ["dbt/trade_analytics/models/marts/valid_trades.sql", "Merge-incremental table of current accepted trades."],
-            ["dbt/trade_analytics/models/marts/rejected_trades.sql", "Append-only rejected-trade audit log."],
-            ["dbt/trade_analytics/models/marts/trade_status.sql", "View computing ACTIVE/EXPIRED status."],
-            ["dbt Cloud (external, not a repo file)", "Hourly job: dbt run then dbt test, reading this repo via a read-only deploy key. Separate Development and Production environments."],
+            ["dbt/trade_analytics/models/silver/stg_trades.sql", "Consumes the BRONZE stream, flattens VARIANT to columns."],
+            ["dbt/trade_analytics/models/silver/int_trades_evaluated.sql", "All business-rule logic (accept/reject + reason)."],
+            ["dbt/trade_analytics/macros/convert_to_usd.sql", "Currency-conversion macro: loops over an FX-rate var to build a CASE expression."],
+            ["dbt/trade_analytics/snapshots/valid_trades_snapshot.sql", "Type 2 SCD snapshot of the trade book, run monthly."],
+            ["dbt/trade_analytics/models/gold/valid_trades.sql", "Merge-incremental table of current accepted trades."],
+            ["dbt/trade_analytics/models/gold/rejected_trades.sql", "Append-only rejected-trade audit log."],
+            ["dbt/trade_analytics/models/gold/trade_status.sql", "View computing ACTIVE/EXPIRED status + notional_usd."],
+            ["dbt Cloud (external, not a repo file)", "Hourly job: dbt run then dbt test. Separate monthly job: dbt snapshot. Reads this repo via a read-only deploy key; separate Development and Production environments."],
             ["orchestration/airflow/ (alternative)", "Complete Docker Compose Airflow stack, documented but not the primary orchestration path."],
             ["dashboard/streamlit_app.py", "Optional Streamlit dashboard over trade_status and rejected_trades."],
+            ["snowflake_sql/observability_toolkit.sql", "Ready-to-run debugging, time-travel, optimization and monitoring queries."],
             [".github/workflows/dbt_ci.yml, terraform_ci.yml", "CI/CD: dbt build/test on PR + merge; terraform fmt/validate/plan on PR, apply on manual dispatch."],
             ["docs/SETUP_GUIDE.md, VALIDATION_LOGIC.md, SCALABILITY.md", "Step-by-step setup, rule-by-rule rationale, and the failure-handling / monitoring / 10,000x-scale write-up."],
         ],
@@ -191,23 +196,27 @@ def build():
     add_h2(doc, "4. Pipeline flow")
     add_code_block(
         doc,
+        "BRONZE          SILVER                GOLD\n"
+        "\n"
         "GENERATE_TRADE_FILES_TASK (every 2 min)\n"
-        "      |  CALL RAW.GENERATE_TRADE_FILES(...)\n"
+        "      |  CALL BRONZE.GENERATE_TRADE_FILES(...)\n"
         "      v\n"
-        "RAW.TRADES_STAGE  (files)\n"
+        "TRADES_STAGE  (files)\n"
         "      ^\n"
         "      |  polls\n"
-        "INGEST_TRADES_TASK (every 5 min) --(COPY INTO)-->  RAW.TRADES_RAW\n"
+        "INGEST_TRADES_TASK (every 5 min) --(COPY INTO)-->  TRADES_RAW\n"
         "                                                        |\n"
-        "                                              RAW.TRADES_RAW_STREAM\n"
+        "                                                  TRADES_RAW_STREAM\n"
         "                                                        |\n"
         "                                            stg_trades  (dbt Cloud,\n"
         "                                                  |      hourly job)\n"
         "                                        int_trades_evaluated\n"
         "                                              /            \\\n"
-        "                                     valid_trades      rejected_trades\n"
-        "                                          |\n"
-        "                                    trade_status (view)",
+        "                                   valid_trades          rejected_trades\n"
+        "                                    /        \\\n"
+        "                          trade_status   valid_trades_snapshot\n"
+        "                          (view, incl.    (Type 2 SCD, dbt Cloud\n"
+        "                           notional_usd)   monthly job: 1st, 01:00 UTC)",
     )
 
     add_h2(doc, "5. Connection details for this account")

@@ -16,5 +16,5 @@ trade_analytics:
       role: "{{ env_var('SNOWFLAKE_TRANSFORMER_ROLE', 'TRADE_ANALYTICS_TRANSFORMER') }}"
       database: "{{ env_var('SNOWFLAKE_DATABASE', 'TRADE_ANALYTICS') }}"
       warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'TRADE_ANALYTICS_WH') }}"
-      schema: "{{ env_var('SNOWFLAKE_TRANSFORM_SCHEMA', 'ANALYTICS') }}"
+      schema: "{{ env_var('SNOWFLAKE_TRANSFORM_SCHEMA', 'GOLD') }}"
       threads: 4

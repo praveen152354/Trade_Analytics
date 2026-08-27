@@ -1,10 +1,12 @@
 """
 Uploads generated trade batch file(s) to the Snowflake internal stage
-(@RAW.TRADES_STAGE) and issues COPY INTO to load them into RAW.TRADES_RAW.
+(@BRONZE.TRADES_STAGE) and issues COPY INTO to load them into BRONZE.TRADES_RAW.
 
 Credentials are read from environment variables (see .env.example). This
 script is invoked both from the CLI for manual testing and from the Airflow
-DAG (orchestration/airflow/dags/trade_pipeline_dag.py).
+DAG (orchestration/airflow/dags/trade_pipeline_dag.py) — a standalone
+dev/test path; the scheduled production path is the Snowpark procedure +
+Snowflake Tasks in terraform/orchestration.tf.
 """
 
 import argparse
@@ -28,7 +30,7 @@ def get_connection():
         role=os.environ.get("SNOWFLAKE_ROLE", "TRADE_ANALYTICS_LOADER"),
         warehouse=os.environ.get("SNOWFLAKE_WAREHOUSE", "TRADE_ANALYTICS_WH"),
         database=os.environ.get("SNOWFLAKE_DATABASE", "TRADE_ANALYTICS"),
-        schema=os.environ.get("SNOWFLAKE_RAW_SCHEMA", "RAW"),
+        schema=os.environ.get("SNOWFLAKE_RAW_SCHEMA", "BRONZE"),
     )
 
 
@@ -44,17 +46,17 @@ def load_files(file_glob: str) -> int:
         loaded = 0
         for path in files:
             abs_path = str(Path(path).resolve()).replace("\\", "/")
-            print(f"Staging {abs_path} -> @RAW.TRADES_STAGE")
-            cur.execute(f"PUT 'file://{abs_path}' @RAW.TRADES_STAGE OVERWRITE = TRUE")
+            print(f"Staging {abs_path} -> @BRONZE.TRADES_STAGE")
+            cur.execute(f"PUT 'file://{abs_path}' @BRONZE.TRADES_STAGE OVERWRITE = TRUE")
             loaded += 1
 
         copy_sql = """
-            COPY INTO RAW.TRADES_RAW (raw_payload, file_name, loaded_at)
+            COPY INTO BRONZE.TRADES_RAW (raw_payload, file_name, loaded_at)
             FROM (
                 SELECT $1, METADATA$FILENAME, CURRENT_TIMESTAMP()
-                FROM @RAW.TRADES_STAGE
+                FROM @BRONZE.TRADES_STAGE
             )
-            FILE_FORMAT = (FORMAT_NAME = 'RAW.TRADE_JSON_FORMAT')
+            FILE_FORMAT = (FORMAT_NAME = 'BRONZE.TRADE_JSON_FORMAT')
             ON_ERROR = 'SKIP_FILE'
             PURGE = TRUE
         """
@@ -67,7 +69,7 @@ def load_files(file_glob: str) -> int:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Load trade batch file(s) into Snowflake RAW.TRADES_RAW")
+    parser = argparse.ArgumentParser(description="Load trade batch file(s) into Snowflake BRONZE.TRADES_RAW")
     parser.add_argument(
         "--file-glob",
         type=str,

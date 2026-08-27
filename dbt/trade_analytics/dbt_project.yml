@@ -8,23 +8,39 @@ model-paths: ["models"]
 macro-paths: ["macros"]
 test-paths: ["tests"]
 seed-paths: ["seeds"]
+snapshot-paths: ["snapshots"]
 
 target-path: "target"
 clean-targets:
   - "target"
   - "dbt_packages"
 
+# Medallion architecture: BRONZE (raw landing, outside dbt) -> SILVER (staging +
+# business-rule evaluation) -> GOLD (marts + Type-2 SCD snapshot). Folder names
+# below (staging/intermediate/marts) are dbt's own organizational convention and
+# don't have to match the physical schema names they materialize into.
 models:
   trade_analytics:
-    staging:
+    silver:
       +materialized: incremental
-      +schema: staging
-    intermediate:
-      +materialized: incremental
-      +schema: intermediate
-    marts:
-      +schema: analytics
+      +schema: silver
+    gold:
+      +schema: gold
+
+snapshots:
+  trade_analytics:
+    +schema: gold
 
 vars:
   # Earliest timestamp used to seed incremental watermark comparisons.
   epoch_timestamp: '1900-01-01 00:00:00 +0000'
+
+  # Single source of truth for the convert_to_usd() macro (macros/convert_to_usd.sql).
+  # Change a rate here and every model using the macro picks it up on the next run.
+  fx_rates_to_usd:
+    USD: 1.0
+    EUR: 1.08
+    GBP: 1.27
+    JPY: 0.0067
+    CHF: 1.12
+    AUD: 0.65

@@ -40,9 +40,9 @@ variable "transformer_role_name" {
 }
 
 variable "schemas" {
-  description = "Schemas created under the database: raw landing, dbt staging/intermediate, and the analytics marts."
+  description = "Medallion-architecture schemas: BRONZE (raw landing), SILVER (dbt staging + business-rule evaluation), GOLD (marts + Type-2 SCD snapshot)."
   type        = list(string)
-  default     = ["RAW", "STAGING", "INTERMEDIATE", "ANALYTICS"]
+  default     = ["BRONZE", "SILVER", "GOLD"]
 }
 
 ## Orchestration (Snowflake-native: Snowpark proc + Tasks) ####################

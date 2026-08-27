@@ -10,13 +10,13 @@
 -- python -c "from load_to_snowflake import get_connection; get_connection().cursor().execute(open('terraform/sql/generate_trade_files_procedure.sql').read())"
 -- (or paste directly into a Snowsight worksheet as ACCOUNTADMIN)
 
-CREATE OR REPLACE PROCEDURE TRADE_ANALYTICS.RAW.GENERATE_TRADE_FILES(NUM_TRADES NUMBER)
+CREATE OR REPLACE PROCEDURE TRADE_ANALYTICS.BRONZE.GENERATE_TRADE_FILES(NUM_TRADES NUMBER)
 RETURNS STRING
 LANGUAGE PYTHON
 RUNTIME_VERSION = '3.11'
 PACKAGES = ('snowflake-snowpark-python')
 HANDLER = 'generate_trade_file'
-COMMENT = 'Generates a batch of mock trade messages and writes it as .jsonl straight onto RAW.TRADES_STAGE.'
+COMMENT = 'Generates a batch of mock trade messages and writes it as .jsonl straight onto BRONZE.TRADES_STAGE.'
 AS
 $$
 import io
@@ -106,7 +106,7 @@ def generate_trade_file(session, num_trades: int) -> str:
 
     batch_ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     file_name = f"trades_{batch_ts}.jsonl"
-    session.file.put_stream(buf, f"@RAW.TRADES_STAGE/{file_name}", auto_compress=True, overwrite=True)
+    session.file.put_stream(buf, f"@BRONZE.TRADES_STAGE/{file_name}", auto_compress=True, overwrite=True)
 
     return f"Wrote {len(records)} trades to {file_name}"
 $$;

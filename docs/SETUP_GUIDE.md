@@ -15,7 +15,7 @@
   if you want the Airflow *alternative* orchestrator; not needed for the
   primary Snowflake-native + dbt Cloud path
 
-## 1. Deploy `RAW.GENERATE_TRADE_FILES`, then provision everything else with Terraform
+## 1. Deploy `BRONZE.GENERATE_TRADE_FILES`, then provision everything else with Terraform
 
 This one object is deployed via plain SQL rather than Terraform — see the
 comment at the top of `terraform/sql/generate_trade_files_procedure.sql`
@@ -52,7 +52,7 @@ conn = snowflake.connector.connect(
     account=os.environ['SNOWFLAKE_ACCOUNT'],
     user=os.environ['SNOWFLAKE_USER'],
     password=os.environ['SNOWFLAKE_PASSWORD'],
-    role='ACCOUNTADMIN', warehouse='TRADE_ANALYTICS_WH', database='TRADE_ANALYTICS', schema='RAW',
+    role='ACCOUNTADMIN', warehouse='TRADE_ANALYTICS_WH', database='TRADE_ANALYTICS', schema='BRONZE',
 )
 conn.cursor().execute(open('sql/generate_trade_files_procedure.sql', encoding='utf-8').read())
 print('deployed')
@@ -60,10 +60,10 @@ print('deployed')
 ```
 
 `terraform apply` creates: database `TRADE_ANALYTICS`, warehouse
-`TRADE_ANALYTICS_WH`, schemas `RAW`/`STAGING`/`INTERMEDIATE`/`ANALYTICS`,
+`TRADE_ANALYTICS_WH`, medallion schemas `BRONZE`/`SILVER`/`GOLD`,
 roles `TRADE_ANALYTICS_LOADER` / `TRADE_ANALYTICS_TRANSFORMER`, the
-`RAW.TRADES_STAGE` internal stage, `RAW.TRADE_JSON_FORMAT` file format,
-`RAW.TRADES_RAW` landing table, the `RAW.TRADES_RAW_STREAM` stream dbt
+`BRONZE.TRADES_STAGE` internal stage, `BRONZE.TRADE_JSON_FORMAT` file format,
+`BRONZE.TRADES_RAW` landing table, the `BRONZE.TRADES_RAW_STREAM` stream dbt
 consumes from, **and the orchestration layer**: `GENERATE_TRADE_FILES_TASK`
 (writes a new batch to the stage every 2 min, configurable via
 `trade_generation_schedule_minutes`), `INGEST_TRADES_TASK` (COPY INTOs new
@@ -92,11 +92,11 @@ python -c "
 import os, snowflake.connector
 from dotenv import load_dotenv
 load_dotenv()
-conn = snowflake.connector.connect(account=os.environ['SNOWFLAKE_ACCOUNT'], user=os.environ['SNOWFLAKE_USER'], password=os.environ['SNOWFLAKE_PASSWORD'], role='ACCOUNTADMIN', warehouse='TRADE_ANALYTICS_WH', database='TRADE_ANALYTICS', schema='RAW')
-conn.cursor().execute('CALL RAW.GENERATE_TRADE_FILES(50)')
+conn = snowflake.connector.connect(account=os.environ['SNOWFLAKE_ACCOUNT'], user=os.environ['SNOWFLAKE_USER'], password=os.environ['SNOWFLAKE_PASSWORD'], role='ACCOUNTADMIN', warehouse='TRADE_ANALYTICS_WH', database='TRADE_ANALYTICS', schema='BRONZE')
+conn.cursor().execute('CALL BRONZE.GENERATE_TRADE_FILES(50)')
 "
 ```
-Then check `select count(*) from TRADE_ANALYTICS.RAW.TRADES_RAW;` after
+Then check `select count(*) from TRADE_ANALYTICS.BRONZE.TRADES_RAW;` after
 `INGEST_TRADES_TASK`'s next scheduled run (or run its `COPY INTO` manually —
 see `terraform/orchestration.tf` for the exact statement).
 
@@ -128,8 +128,8 @@ dbt-snowflake` and bare `dbt` command work fine — skip the venv dance.)
 
 Check results:
 ```sql
-select * from TRADE_ANALYTICS.ANALYTICS.TRADE_STATUS;
-select * from TRADE_ANALYTICS.ANALYTICS.REJECTED_TRADES;
+select * from TRADE_ANALYTICS.GOLD.TRADE_STATUS;
+select * from TRADE_ANALYTICS.GOLD.REJECTED_TRADES;
 ```
 
 ## 5. Schedule dbt run/test with dbt Cloud
@@ -144,13 +144,19 @@ select * from TRADE_ANALYTICS.ANALYTICS.REJECTED_TRADES;
    `TRADE_ANALYTICS`, warehouse `TRADE_ANALYTICS_WH`, role
    `TRADE_ANALYTICS_TRANSFORMER`.
 4. Create a **Development** environment (credentials: your Snowflake user,
-   schema `ANALYTICS`) and a **Production** environment (same connection,
+   schema `GOLD`) and a **Production** environment (same connection,
    its own credentials) — dbt Cloud requires a development environment to
    be configured even if you only use the IDE occasionally.
 5. Create a Job on the Production environment: steps `dbt run` then
    `dbt test`, a cron schedule (hourly is a reasonable default for this
    volume), and turn on failure notifications (Deploy → Notifications) for
    email/Slack alerts independent of the Snowflake-side `TASK_FAILURE_ALERT`.
+6. Create a second Job, steps `dbt snapshot` only, scheduled monthly
+   (cron `0 1 1 * *` — 01:00 UTC on the 1st) to populate
+   `valid_trades_snapshot`, the Type 2 SCD history of the trade book. In the
+   dbt Cloud UI this is the "Custom Cron Schedule" option under the job's
+   Schedule tab, not the day-of-month picker (which can't express "run
+   once, on the 1st, ignoring the other trigger types").
 
 All of the above is scriptable via the [dbt Cloud Admin API](https://docs.getdbt.com/dbt-cloud/api-v2)
 if you'd rather automate it than click through the UI — that's how this
@@ -188,7 +194,7 @@ GitHub Actions workflows are in `.github/workflows/`:
 - `terraform_ci.yml` — `fmt`/`init`/`validate`/`plan` on every PR touching
   `terraform/**`; `apply` is manual (`workflow_dispatch`) by design — see
   the comment in that file. The manual `apply` job also deploys
-  `RAW.GENERATE_TRADE_FILES` from the SQL script before running Terraform.
+  `BRONZE.GENERATE_TRADE_FILES` from the SQL script before running Terraform.
 
 Add these repository secrets for the workflows to run:
 `SNOWFLAKE_ORGANIZATION_NAME`, `SNOWFLAKE_ACCOUNT_NAME`, `SNOWFLAKE_USER`,

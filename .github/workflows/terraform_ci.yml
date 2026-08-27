@@ -63,7 +63,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Deploy RAW.GENERATE_TRADE_FILES (managed outside Terraform — see sql/ header comment)
+      - name: Deploy BRONZE.GENERATE_TRADE_FILES (managed outside Terraform — see sql/ header comment)
         working-directory: .
         run: |
           pip install -q snowflake-connector-python
@@ -77,7 +77,7 @@ jobs:
               role="ACCOUNTADMIN",
               warehouse="TRADE_ANALYTICS_WH",
               database="TRADE_ANALYTICS",
-              schema="RAW",
+              schema="BRONZE",
           )
           sql = open("terraform/sql/generate_trade_files_procedure.sql", encoding="utf-8").read()
           conn.cursor().execute(sql)

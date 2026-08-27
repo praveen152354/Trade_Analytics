@@ -1,9 +1,9 @@
 version: 2
 
 sources:
-  - name: raw
+  - name: bronze
     database: "{{ target.database }}"
-    schema: RAW
+    schema: BRONZE
     tables:
       - name: trades_raw
         description: >
@@ -19,7 +19,7 @@ sources:
 
       - name: trades_raw_stream
         description: >
-          Standard Snowflake stream on RAW.TRADES_RAW. Selecting from it
+          Standard Snowflake stream on BRONZE.TRADES_RAW. Selecting from it
           inside a dbt incremental model's merge/insert statement consumes
           it and advances its offset — this is the "Snowflake feature" used
           to consume newly-arrived trades (see stg_trades.sql).

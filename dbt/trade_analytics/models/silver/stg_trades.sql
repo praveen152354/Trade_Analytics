@@ -16,7 +16,7 @@ with source as (
         raw_payload,
         file_name,
         loaded_at
-    from {{ source('raw', 'trades_raw_stream') }}
+    from {{ source('bronze', 'trades_raw_stream') }}
     where metadata$action = 'INSERT'
 
 )

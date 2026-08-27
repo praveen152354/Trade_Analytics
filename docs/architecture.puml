@@ -7,21 +7,22 @@ package "Snowflake" {
   component "GENERATE_TRADE_FILES_TASK\n(schedule: N min, default 2)" as GENTASK
   component "INGEST_TRADES_TASK\n(schedule: N min, default 5)" as INGESTTASK
 
-  database "RAW schema" {
+  database "BRONZE schema" {
     [TRADES_STAGE\n(internal stage)] as STAGE
     [TRADES_RAW\n(landing table)] as RAWTBL
     [TRADES_RAW_STREAM\n(CDC stream)] as STREAM
   }
 
-  database "STAGING / INTERMEDIATE (dbt)" {
+  database "SILVER schema (dbt)" {
     [stg_trades] as STG
     [int_trades_evaluated\n(business rules)] as EVAL
   }
 
-  database "ANALYTICS (dbt marts)" {
+  database "GOLD schema (dbt marts)" {
     [valid_trades] as VALID
     [rejected_trades\n(audit log)] as REJ
-    [trade_status\n(view: ACTIVE/EXPIRED)] as STATUS
+    [trade_status\n(view: ACTIVE/EXPIRED,\nnotional_usd via macro)] as STATUS
+    [valid_trades_snapshot\n(Type 2 SCD, monthly)] as SNAP
   }
 
   [TASK_FAILURE_ALERT\n(snowflake_alert, every 15 min)] as ALERT
@@ -30,6 +31,7 @@ package "Snowflake" {
 
 package "dbt Cloud" {
   [Hourly job:\ndbt run + dbt test] as DBT
+  [Monthly job (1st, 01:00 UTC):\ndbt snapshot] as DBTSNAP
 }
 
 package "Optional / alternative" {
@@ -47,11 +49,13 @@ STG --> EVAL : version/maturity rules
 EVAL --> VALID : ACCEPTED
 EVAL --> REJ : REJECTED (+ reason)
 VALID --> STATUS : computed status
+VALID --> SNAP : dbt snapshot\n(check strategy)
 DBT --> STG
 DBT --> EVAL
 DBT --> VALID
 DBT --> REJ
 DBT --> STATUS
+DBTSNAP --> SNAP
 
 STATUS --> DASH
 REJ --> DASH

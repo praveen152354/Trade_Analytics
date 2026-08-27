@@ -32,7 +32,7 @@ models:
                 - SUPERSEDED_IN_BATCH
 
   - name: trade_status
-    description: valid_trades with a dynamically computed ACTIVE/EXPIRED status.
+    description: valid_trades with a dynamically computed ACTIVE/EXPIRED status and notional_usd (via the convert_to_usd macro).
     columns:
       - name: trade_id
         data_tests:
@@ -45,3 +45,6 @@ models:
               values:
                 - ACTIVE
                 - EXPIRED
+      - name: notional_usd
+        data_tests:
+          - not_null
