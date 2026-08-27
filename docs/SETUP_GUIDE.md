@@ -54,14 +54,24 @@ Confirm rows landed: `select count(*) from TRADE_ANALYTICS.RAW.TRADES_RAW;`
 
 ## 4. Run dbt
 
+dbt-core 1.8's dependencies (protobuf's compiled wheel) don't yet support
+very new Python releases (this broke on Python 3.14 with `TypeError:
+Metaclasses with custom tp_new are not supported`). If `python --version`
+is newer than 3.12, install Python 3.11 alongside it and give dbt its own
+virtualenv rather than fighting the system interpreter:
+
 ```powershell
 cd dbt\trade_analytics
-pip install dbt-core==1.8.4 dbt-snowflake==1.8.3
-dbt deps
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install dbt-core==1.8.4 dbt-snowflake==1.8.3
+.\.venv\Scripts\dbt.exe deps
 $env:DBT_PROFILES_DIR = (Get-Location).Path
-dbt run
-dbt test
+.\.venv\Scripts\dbt.exe run
+.\.venv\Scripts\dbt.exe test
 ```
+
+(If your system Python is already 3.9–3.12, a plain `pip install dbt-core
+dbt-snowflake` and bare `dbt` command work fine — skip the venv dance.)
 
 Check results:
 ```sql
