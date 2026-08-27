@@ -2,29 +2,34 @@
 
 ## File arrival delays, data quality problems, task failures
 
-- **File arrival delays**: the DAG doesn't wait on a specific file — each
-  run generates and loads its own batch, so a "delay" just means the next
-  scheduled run's data shows up late; nothing blocks. If this fed from a
-  real upstream feed instead of the generator, the `load_to_snowflake` task
-  would be replaced by a Snowflake `FileSensor`-equivalent (an Airflow
-  sensor polling the stage, or Snowpipe auto-ingest) with a
-  `timeout`/`soft_fail` so a missing file alerts instead of hanging the DAG.
+- **File arrival delays**: generation and ingestion are two *independently
+  scheduled* Snowflake Tasks (`GENERATE_TRADE_FILES_TASK` every 2 min,
+  `INGEST_TRADES_TASK` every 5 min, both configurable in
+  `terraform/variables.tf`) rather than one script waiting on the other.
+  `INGEST_TRADES_TASK` just polls the stage and `COPY INTO`s whatever is
+  there; if a file arrives late, it's picked up on the next poll instead of
+  causing a failure or a stall. Nothing in the design assumes a file will
+  exist by a specific time.
 - **Data quality problems**: caught at two layers. (1) dbt `data_tests` in
   `models/marts/marts.yml` and `models/staging/stg_trades.yml` (`not_null`,
-  `unique`, `accepted_values`) fail the `dbt test` task and email
-  `ALERT_EMAIL_TO`. (2) Business-rule rejects (bad version, matured trade)
-  never fail the pipeline at all — by design, they're routed to
+  `unique`, `accepted_values`) fail the dbt Cloud job and trigger its
+  configured notifications. (2) Business-rule rejects (bad version, matured
+  trade) never fail the pipeline at all — by design, they're routed to
   `rejected_trades` as data, not errors, since a rejected trade is an
   expected outcome, not a pipeline defect.
-- **Task failures**: every Airflow task gets 2 automatic retries
-  (`default_args.retries`, `orchestration/airflow/dags/trade_pipeline_dag.py`)
-  with a 2-minute backoff before it's marked failed and emails out. `COPY
-  INTO ... ON_ERROR = 'SKIP_FILE'` means one malformed file in a batch
-  doesn't abort the whole load. dbt's own dependency graph means a failure
-  in `stg_trades` blocks `int_trades_evaluated`/`valid_trades`/
+- **Task failures**: both Snowflake Tasks have `task_auto_retry_attempts = 2`
+  (automatic retry of a failed run) and `suspend_task_after_num_failures = 3`
+  (auto-suspend after 3 consecutive failures, so a broken task can't spin
+  forever burning warehouse credits) — see `terraform/orchestration.tf`.
+  `COPY INTO ... ON_ERROR = 'SKIP_FILE'` means one malformed file in a
+  batch doesn't abort the whole load. dbt's own dependency graph means a
+  failure in `stg_trades` blocks `int_trades_evaluated`/`valid_trades`/
   `rejected_trades` from running on bad input rather than silently
   processing partial data (`dbt run` stops downstream models on an upstream
-  failure by default).
+  failure by default). A `snowflake_alert` (`TASK_FAILURE_ALERT`) checks
+  `TASK_HISTORY` every 15 minutes and emails `alert_email` if either task
+  failed — this fires even if dbt Cloud or anything outside Snowflake is
+  down, since it's entirely native.
 
 ## Monitoring pipeline health with Snowflake's admin views + Alerts
 
@@ -39,31 +44,29 @@ Query these `SNOWFLAKE.ACCOUNT_USAGE` (account-wide, ~45min-3hr latency) or
 - **`WAREHOUSE_METERING_HISTORY`** — credits consumed by
   `TRADE_ANALYTICS_WH` over time; the early-warning signal for runaway
   cost as volume grows.
-- **`TASK_HISTORY`** — relevant only if Snowflake Tasks are added later
-  (this project uses Airflow instead); shows scheduled task run
-  success/failure/skip.
+- **`TASK_HISTORY`** — real-time (`INFORMATION_SCHEMA.TASK_HISTORY`, no
+  latency) or historical (`ACCOUNT_USAGE.TASK_HISTORY`); shows every
+  `GENERATE_TRADE_FILES_TASK` / `INGEST_TRADES_TASK` run's
+  success/failure/skip. This is the primary health signal for this
+  project's orchestration.
 
-For alerting, two options layered on top of what Airflow already does:
+Alerting is implemented, not just described — `terraform/orchestration.tf`
+creates:
 
-1. **Snowflake `CREATE ALERT`** — a native scheduled alert that runs a
-   condition query against `ACCOUNT_USAGE` and fires a notification (email
-   via a notification integration) when true, e.g.:
-   ```sql
-   create alert copy_failures_alert
-     warehouse = trade_analytics_wh
-     schedule = '30 minute'
-     if (exists (
-       select 1 from snowflake.account_usage.copy_history
-       where status = 'LOAD_FAILED' and last_load_time > dateadd('hour', -1, current_timestamp())
-     ))
-     then call system$send_email(...);
-   ```
-   This catches failures even if Airflow itself is down — a level of
-   monitoring that lives outside the orchestrator.
-2. **Airflow email-on-failure** (already wired, see
-   `orchestration/airflow/docker-compose.yml` SMTP config +
-   `default_args.email_on_failure` in the DAG) — catches DAG/task-level
-   failures with full log context in one click.
+1. **`snowflake_alert.task_failure_alert`** — a native scheduled alert
+   (`alert_schedule { interval = 15 }`) whose condition queries
+   `INFORMATION_SCHEMA.TASK_HISTORY` for either task in a `'FAILED'` state
+   in the last 15 minutes, and whose action calls `SYSTEM$SEND_EMAIL` via
+   the `TRADE_PIPELINE_ALERT` email notification integration. This fires
+   independent of dbt Cloud or anything outside Snowflake — it works even
+   if the whole rest of the pipeline is down.
+   (Note: a Snowflake Task's own `ERROR_INTEGRATION` property only accepts
+   cloud-messaging integrations — SNS/Pub-Sub/Event Grid — not `EMAIL`, so
+   email alerting has to go through an `ALERT` like this rather than being
+   set directly on the task.)
+2. **dbt Cloud job notifications** (Deploy → Notifications on the job) —
+   catches `dbt run`/`dbt test` failures with full log context, independent
+   of the Snowflake-side alert above.
 
 ## Scaling to 10,000x the trade volume
 
@@ -71,12 +74,13 @@ For alerting, two options layered on top of what Airflow already does:
   10,000x volume, scale it via `warehouse_size` (Terraform variable) or
   turn on multi-cluster (`min_cluster_count`/`max_cluster_count` in
   `terraform/main.tf`) for concurrency rather than a single bigger
-  warehouse, since Airflow/dbt/dashboard load is mostly concurrent readers,
+  warehouse, since Tasks/dbt/dashboard load is mostly concurrent readers,
   not one giant query.
-- **Ingestion**: swap the internal-stage `PUT`+`COPY INTO` batch load for
-  **Snowpipe Streaming** (or Snowpipe auto-ingest off cloud storage) so
-  ingestion decouples from the 30-minute Airflow schedule entirely and
-  scales to near-continuous arrival without larger/more frequent file PUTs.
+- **Ingestion**: swap the Task-driven `COPY INTO` poll for **Snowpipe
+  Streaming** (or Snowpipe auto-ingest, if trades start landing in genuine
+  external cloud storage instead of the Snowflake-managed stage) so
+  ingestion decouples from the 5-minute Task poll entirely and scales to
+  near-continuous arrival without larger/more frequent batch files.
 - **Stream/merge cost**: the `int_trades_evaluated`→`valid_trades` merge is
   keyed on `trade_id`; at high cardinality, cluster `valid_trades` and
   `int_trades_evaluated` on `trade_id` (or an `date_trunc` of
@@ -88,11 +92,15 @@ For alerting, two options layered on top of what Airflow already does:
   it to a Snowflake **Dynamic Table** (`target_lag = '5 minutes'`) — same
   "derived, not mutated" semantics, but materialized and incrementally
   refreshed instead of recomputed per query.
-- **Orchestration**: a single 30-minute DAG run is fine now; at 10,000x
-  trade volume, split ingestion into per-source-system or per-region DAGs
-  running in parallel (Airflow `max_active_runs`/task-level parallelism),
-  and move from `LocalExecutor` to `CeleryExecutor`/`KubernetesExecutor` so
-  task execution scales across workers instead of one machine.
+- **Orchestration**: today's two Snowflake Tasks are fine at current
+  volume; at 10,000x, split ingestion into multiple Tasks per
+  source-system/region (Snowflake Tasks scale horizontally the same way —
+  each is independent) rather than one Task doing everything, and consider
+  moving dbt scheduling from a single hourly dbt Cloud job to
+  multiple jobs partitioned by model selector so a slow mart doesn't delay
+  a fast one. The `orchestration/airflow/` alternative would scale via
+  `max_active_runs`/task-level parallelism and `CeleryExecutor`/
+  `KubernetesExecutor` if that path were adopted instead.
 - **dbt**: models are already incremental (not full-refresh), so dbt's own
   cost scales with the size of each new batch, not total historical volume
   — the main lever at 10,000x is warehouse size/concurrency above, not

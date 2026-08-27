@@ -2,14 +2,11 @@
 skinparam componentStyle rectangle
 skinparam backgroundColor white
 
-actor "Airflow Scheduler" as AF
-
-package "Ingestion" {
-  component "generate_trades.py\n(mock trade feed)" as GEN
-  component "load_to_snowflake.py\n(PUT + COPY INTO)" as LOAD
-}
-
 package "Snowflake" {
+  component "GENERATE_TRADE_FILES\n(Snowpark procedure)" as PROC
+  component "GENERATE_TRADE_FILES_TASK\n(schedule: N min, default 2)" as GENTASK
+  component "INGEST_TRADES_TASK\n(schedule: N min, default 5)" as INGESTTASK
+
   database "RAW schema" {
     [TRADES_STAGE\n(internal stage)] as STAGE
     [TRADES_RAW\n(landing table)] as RAWTBL
@@ -27,23 +24,24 @@ package "Snowflake" {
     [trade_status\n(view: ACTIVE/EXPIRED)] as STATUS
   }
 
+  [TASK_FAILURE_ALERT\n(snowflake_alert, every 15 min)] as ALERT
   [ACCOUNT_USAGE / INFORMATION_SCHEMA\n(QUERY_HISTORY, COPY_HISTORY,\nTASK_HISTORY, WAREHOUSE_METERING)] as ADMIN
 }
 
-package "Orchestration" {
-  [dbt run / dbt test] as DBT
+package "dbt Cloud" {
+  [Hourly job:\ndbt run + dbt test] as DBT
 }
 
-package "Optional" {
+package "Optional / alternative" {
   [Streamlit dashboard] as DASH
+  [Airflow (Docker Compose)\nalternative orchestrator] as AF
 }
 
-AF --> GEN : schedule (every 30 min)
-GEN --> LOAD : writes .jsonl batch
-LOAD --> STAGE : PUT file
-STAGE --> RAWTBL : COPY INTO
+GENTASK --> PROC : CALL (own schedule)
+PROC --> STAGE : writes .jsonl
+INGESTTASK --> STAGE : polls (own schedule)
+INGESTTASK --> RAWTBL : COPY INTO
 RAWTBL ..> STREAM : change capture
-AF --> DBT
 STREAM --> STG : consumed by\nincremental model
 STG --> EVAL : version/maturity rules
 EVAL --> VALID : ACCEPTED
@@ -58,14 +56,24 @@ DBT --> STATUS
 STATUS --> DASH
 REJ --> DASH
 
-RAWTBL -[hidden]-> ADMIN
-AF ..> ADMIN : monitoring queries\n+ Snowflake Alerts
+GENTASK ..> ALERT : TASK_HISTORY
+INGESTTASK ..> ALERT : TASK_HISTORY
+ALERT ..> ADMIN
 
-note right of AF
-  On task failure: Airflow emails
-  ALERT_EMAIL_TO (SMTP) and the
-  DAG run/task shows failed in
-  the Airflow UI + retries twice.
+AF ..> PROC : could call instead\n(not the primary path)
+
+note right of ALERT
+  Condition: either task FAILED
+  in INFORMATION_SCHEMA.TASK_HISTORY
+  in the last 15 min.
+  Action: SYSTEM$SEND_EMAIL via
+  TRADE_PIPELINE_ALERT integration.
+  Fires independent of dbt Cloud.
+end note
+
+note right of GENTASK
+  task_auto_retry_attempts = 2
+  suspend_task_after_num_failures = 3
 end note
 
 @enduml

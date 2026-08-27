@@ -162,10 +162,11 @@ resource "snowflake_stage" "trades_stage" {
 }
 
 resource "snowflake_table" "trades_raw" {
-  name     = "TRADES_RAW"
-  database = snowflake_database.trade_analytics.name
-  schema   = "RAW"
-  comment  = "Insert-only landing table for raw trade messages."
+  name            = "TRADES_RAW"
+  database        = snowflake_database.trade_analytics.name
+  schema          = "RAW"
+  comment         = "Insert-only landing table for raw trade messages."
+  change_tracking = true # required by the stream Snowflake auto-enabled this when TRADES_RAW_STREAM was created; must be declared or terraform will try to turn it back off.
 
   column {
     name = "RAW_PAYLOAD"

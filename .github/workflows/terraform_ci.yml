@@ -13,11 +13,15 @@ defaults:
     working-directory: terraform
 
 env:
-  SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+  # The snowflakedb/snowflake provider (v1.2.3) reads the org/account split,
+  # not a combined SNOWFLAKE_ACCOUNT — see .env.example for why.
+  SNOWFLAKE_ORGANIZATION_NAME: ${{ secrets.SNOWFLAKE_ORGANIZATION_NAME }}
+  SNOWFLAKE_ACCOUNT_NAME: ${{ secrets.SNOWFLAKE_ACCOUNT_NAME }}
   SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
   SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
   SNOWFLAKE_ROLE: ACCOUNTADMIN
   TF_VAR_grantee_user: ${{ secrets.SNOWFLAKE_USER }}
+  TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
 
 jobs:
   validate:
@@ -54,6 +58,31 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Deploy RAW.GENERATE_TRADE_FILES (managed outside Terraform — see sql/ header comment)
+        working-directory: .
+        run: |
+          pip install -q snowflake-connector-python
+          python - <<'PY'
+          import os
+          import snowflake.connector
+          conn = snowflake.connector.connect(
+              account=f"{os.environ['SNOWFLAKE_ORGANIZATION_NAME']}-{os.environ['SNOWFLAKE_ACCOUNT_NAME']}",
+              user=os.environ["SNOWFLAKE_USER"],
+              password=os.environ["SNOWFLAKE_PASSWORD"],
+              role="ACCOUNTADMIN",
+              warehouse="TRADE_ANALYTICS_WH",
+              database="TRADE_ANALYTICS",
+              schema="RAW",
+          )
+          sql = open("terraform/sql/generate_trade_files_procedure.sql", encoding="utf-8").read()
+          conn.cursor().execute(sql)
+          print("Procedure deployed.")
+          PY
 
       - uses: hashicorp/setup-terraform@v3
 

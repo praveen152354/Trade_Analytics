@@ -14,5 +14,8 @@ provider "snowflake" {
     "snowflake_file_format_resource",
     "snowflake_stage_resource",
     "snowflake_table_resource",
+    "snowflake_email_notification_integration_resource",
+    "snowflake_procedure_python_resource",
+    "snowflake_alert_resource",
   ]
 }
