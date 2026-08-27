@@ -9,4 +9,10 @@
 
 provider "snowflake" {
   role = var.bootstrap_role
+  # These resources are still preview features in provider v1.2.3.
+  preview_features_enabled = [
+    "snowflake_file_format_resource",
+    "snowflake_stage_resource",
+    "snowflake_table_resource",
+  ]
 }
