@@ -1,5 +1,6 @@
 # Secrets
 .env
+.git-credentials-temp
 orchestration/airflow/.env
 terraform.tfvars
 *.pem
