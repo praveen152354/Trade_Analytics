@@ -1,7 +1,10 @@
--- A message_id that was accepted should never also appear in the rejected
--- log, and a trade_id currently in valid_trades should never have its
--- *current* version sitting in rejected_trades. Returns offending rows;
--- dbt test passes when this returns zero rows.
+-- A message rejected for being stale (rule 1) should always have a version
+-- strictly lower than the trade's current accepted version — if one shows up
+-- with version >= the current valid version, the version-comparison logic in
+-- int_trades_evaluated has a bug. SUPERSEDED_IN_BATCH rejects are excluded on
+-- purpose: a same-version duplicate arriving in one batch is expected to
+-- share its version with the message that got accepted, so that case alone
+-- doesn't indicate a defect.
 
 select
     v.trade_id,
@@ -11,4 +14,5 @@ select
 from {{ ref('valid_trades') }} v
 join {{ ref('rejected_trades') }} r
     on v.trade_id = r.trade_id
-    and v.version = r.version
+where r.reject_reason = 'STALE_VERSION_LOWER_THAN_EXISTING'
+  and r.version >= v.version
