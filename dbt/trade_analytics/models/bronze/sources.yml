@@ -1,5 +1,15 @@
 version: 2
 
+# BRONZE is the raw landing layer: dbt doesn't create or materialize
+# anything here (that's Terraform + the GENERATE_TRADE_FILES Snowpark
+# procedure's job — see terraform/main.tf and terraform/orchestration.tf),
+# but declaring it as a dbt source gives it a real node in the lineage
+# graph (dbt docs / `dbt ls`), documents its columns in one place, and is
+# what stg_trades.sql's source() call resolves against. This file existing
+# under models/bronze/ — rather than tucked into models/silver/ — is what
+# makes the medallion layering in models/ match the physical BRONZE/SILVER/
+# GOLD schemas 1:1.
+
 sources:
   - name: bronze
     database: "{{ target.database }}"
@@ -22,4 +32,4 @@ sources:
           Standard Snowflake stream on BRONZE.TRADES_RAW. Selecting from it
           inside a dbt incremental model's merge/insert statement consumes
           it and advances its offset — this is the "Snowflake feature" used
-          to consume newly-arrived trades (see stg_trades.sql).
+          to consume newly-arrived trades (see models/silver/stg_trades.sql).

@@ -173,6 +173,7 @@ def build():
             ["data_generator/generate_trades.py + load_to_snowflake.py", "Standalone dev/test path (PUT + COPY INTO from a local machine) -- not part of the scheduled production flow."],
             ["terraform/*.tf", "IaC for every Snowflake object listed in section 1, including the Tasks and Alert."],
             ["terraform/sql/generate_trade_files_procedure.sql", "The one object deployed outside Terraform -- see section 1."],
+            ["dbt/trade_analytics/models/bronze/sources.yml", "Declares BRONZE as a dbt source (no models materialize here -- Terraform + the Snowpark procedure own it) so it still shows up in dbt's lineage graph."],
             ["dbt/trade_analytics/models/silver/stg_trades.sql", "Consumes the BRONZE stream, flattens VARIANT to columns."],
             ["dbt/trade_analytics/models/silver/int_trades_evaluated.sql", "All business-rule logic (accept/reject + reason)."],
             ["dbt/trade_analytics/macros/convert_to_usd.sql", "Currency-conversion macro: loops over an FX-rate var to build a CASE expression."],

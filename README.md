@@ -40,9 +40,14 @@ volume. The architecture diagram source is
 | Silver | `SILVER` | `stg_trades` (flattened raw) and `int_trades_evaluated` (business-rule decisions) — cleansed, conformed, not yet business-facing. |
 | Gold | `GOLD` | `valid_trades`, `rejected_trades`, `trade_status` (marts), and `valid_trades_snapshot` (Type 2 SCD history). Business-consumable. |
 
-dbt's own folder convention (`models/silver/`, `models/gold/`) matches the
-physical schemas 1:1 in this project, though that's a project choice, not a
-dbt requirement — see the comment at the top of `dbt_project.yml`.
+dbt's own folder convention (`models/bronze/`, `models/silver/`,
+`models/gold/`) matches the physical schemas 1:1 in this project, though
+that's a project choice, not a dbt requirement — see the comment at the top
+of `dbt_project.yml`. `models/bronze/` holds only `sources.yml`: dbt
+doesn't materialize anything into BRONZE itself (Terraform and the Snowpark
+procedure own that), but declaring it as a dbt source still gives the
+landing layer a real node in dbt's lineage graph instead of leaving it
+invisible to `dbt docs`/`dbt ls`.
 
 ## Pipeline at a glance
 
