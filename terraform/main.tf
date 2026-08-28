@@ -100,7 +100,7 @@ resource "snowflake_grant_privileges_to_account_role" "loader_raw_schema_usage" 
 # Transformer (dbt) only needs to read BRONZE; it creates objects in SILVER/GOLD.
 resource "snowflake_grant_privileges_to_account_role" "transformer_raw_schema_usage" {
   account_role_name = snowflake_account_role.transformer.name
-  privileges        = ["USAGE"]
+  privileges        = ["USAGE", "CREATE VIEW"]
   on_schema {
     schema_name = snowflake_schema.schemas["BRONZE"].fully_qualified_name
   }

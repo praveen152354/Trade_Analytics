@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: base_trades_raw
+    description: >
+      Thin passthrough view over BRONZE.TRADES_RAW. Not part of the actual
+      trades data path (stg_trades.sql reads the stream directly) -- exists
+      so BRONZE has a real, browsable node in dbt's lineage graph.
+    columns:
+      - name: raw_payload
+        description: Full trade message as a VARIANT (JSON).
+      - name: file_name
+      - name: loaded_at
+
+  - name: base_fx_rates_raw
+    description: >
+      Thin passthrough view over BRONZE.FX_RATES_RAW. This IS the actual
+      source silver.fx_rates builds from (via ref()).
+    columns:
+      - name: as_of_date
+      - name: currency
+      - name: rate_to_usd
+      - name: file_name
+      - name: loaded_at

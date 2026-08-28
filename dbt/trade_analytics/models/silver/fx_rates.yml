@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: fx_rates
+    description: >
+      One row per (as_of_date, currency) -- the most recently loaded rate,
+      deduplicated from BRONZE.FX_RATES_RAW. If a file is edited and
+      re-uploaded to S3 under the same name, this model picks up the
+      correction and merges it in rather than showing both values.
+    columns:
+      - name: as_of_date
+        data_tests:
+          - not_null
+      - name: currency
+        data_tests:
+          - not_null
+      - name: rate_to_usd
+        data_tests:
+          - not_null
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - as_of_date
+            - currency

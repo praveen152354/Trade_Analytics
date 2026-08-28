@@ -62,15 +62,23 @@ stays in sync automatically, and adding a seventh currency is a one-line
 var change rather than finding and editing every `CASE` statement that
 happens to convert currency.
 
-**Future integration point**: `BRONZE.FX_RATES_RAW` (S3 → external stage →
-`INGEST_FX_RATES_TASK`, once daily — see `terraform/s3_integration.tf`) now
-lands real daily FX rates, but nothing consumes it yet. The natural next
-step is a `silver.fx_rates` model taking the latest rate per currency, with
-`convert_to_usd()` changed to join against it instead of reading the static
-`fx_rates_to_usd` var — swapping a hardcoded rate table for a live one
-without changing the macro's call sites. Not done yet since it wasn't part
-of the original ask; noted here so it's an obvious next step rather than a
-gap.
+**FX rates, deduplicated**: `BRONZE.FX_RATES_RAW` (S3 → external stage →
+`INGEST_FX_RATES_TASK`, once daily — see `terraform/s3_integration.tf`)
+lands real daily FX rates and is deliberately append-only — if a file is
+edited and manually re-uploaded under the same name, Snowflake's `COPY
+INTO` treats it as new and loads it again rather than overwriting, so the
+same `(as_of_date, currency)` can legitimately appear more than once in
+BRONZE. `silver.fx_rates` resolves that: a merge-on-latest incremental
+model (`unique_key=['as_of_date', 'currency']`), the exact same pattern as
+`valid_trades`, just keyed differently. Querying `silver.fx_rates` always
+returns one current row per date+currency; `BRONZE.FX_RATES_RAW` keeps
+every version ever loaded, for audit.
+
+**Still a future integration point**: `convert_to_usd()` still reads the
+static `fx_rates_to_usd` var in `dbt_project.yml`, not `silver.fx_rates`.
+Swapping the macro to join against live rates instead of a hardcoded table
+is a natural next step, not done yet since it wasn't part of the original
+ask.
 
 ## Tech stack choices
 

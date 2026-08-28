@@ -36,8 +36,8 @@ volume. The architecture diagram source is
 
 | Layer | Schema | Contents |
 |---|---|---|
-| Bronze | `BRONZE` | Raw landing: `TRADES_RAW` table, `TRADES_STAGE` internal stage, `TRADES_RAW_STREAM` CDC stream, the `GENERATE_TRADE_FILES` procedure, and both orchestration Tasks. |
-| Silver | `SILVER` | `stg_trades` (flattened raw) and `int_trades_evaluated` (business-rule decisions) — cleansed, conformed, not yet business-facing. |
+| Bronze | `BRONZE` | Raw landing: `TRADES_RAW`/`FX_RATES_RAW` tables, `TRADES_STAGE` internal stage + `FX_RATES_STAGE` external (S3) stage, `TRADES_RAW_STREAM` CDC stream, the `GENERATE_TRADE_FILES` procedure, three orchestration Tasks — plus `base_trades_raw`/`base_fx_rates_raw`, thin dbt passthrough views that give BRONZE a real, browsable node in the lineage graph. |
+| Silver | `SILVER` | `stg_trades` + `int_trades_evaluated` (business-rule decisions for trades), and `fx_rates` (merge-dedup of `FX_RATES_RAW` down to one row per date+currency) — cleansed, conformed, not yet business-facing. |
 | Gold | `GOLD` | `valid_trades`, `rejected_trades`, `trade_status` (marts), and `valid_trades_snapshot` (Type 2 SCD history). Business-consumable. |
 
 dbt's own folder convention (`models/bronze/`, `models/silver/`,

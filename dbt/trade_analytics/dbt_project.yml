@@ -15,12 +15,15 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
-# Medallion architecture: BRONZE (raw landing, outside dbt) -> SILVER (staging +
+# Medallion architecture: BRONZE (raw landing) -> SILVER (staging +
 # business-rule evaluation) -> GOLD (marts + Type-2 SCD snapshot). Folder names
-# below (staging/intermediate/marts) are dbt's own organizational convention and
-# don't have to match the physical schema names they materialize into.
+# below are dbt's own organizational convention and don't have to match the
+# physical schema names they materialize into (they do here, on purpose).
 models:
   trade_analytics:
+    bronze:
+      +materialized: view
+      +schema: bronze
     silver:
       +materialized: incremental
       +schema: silver
