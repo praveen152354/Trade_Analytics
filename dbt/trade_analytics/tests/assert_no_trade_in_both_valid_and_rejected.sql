@@ -11,8 +11,8 @@ select
     v.version as valid_version,
     r.version as rejected_version,
     r.reject_reason
-from {{ ref('valid_trades') }} v
-join {{ ref('rejected_trades') }} r
+from {{ ref('fct_valid_trades') }} v
+join {{ ref('fct_rejected_trades') }} r
     on v.trade_id = r.trade_id
 where r.reject_reason = 'STALE_VERSION_LOWER_THAN_EXISTING'
   and r.version >= v.version

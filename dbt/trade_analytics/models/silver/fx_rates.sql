@@ -3,7 +3,8 @@
     materialized='incremental',
     unique_key=['as_of_date', 'currency'],
     incremental_strategy='merge',
-    on_schema_change='append_new_columns'
+    on_schema_change='append_new_columns',
+    transient=true
   )
 }}
 

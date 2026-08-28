@@ -124,6 +124,23 @@ where query_tag ilike '%dbt%'
   and start_time > dateadd('day', -7, current_timestamp())
 order by start_time desc;
 
+-- 1.9 Ad-hoc investigation using a TEMPORARY table -- the right tool for
+-- "let me poke at this without leaving anything behind or granting myself
+-- write access to a real schema." Session-scoped: it's visible only to this
+-- session, and Snowflake drops it automatically when the session ends (no
+-- 6.4-style manual cleanup needed, unlike the Time Travel clone in 2.6,
+-- which is a real object other sessions can see until you drop it).
+create or replace temporary table tmp_todays_rejects as
+select trade_id, version, reject_reason, count(*) as message_count
+from trade_analytics.gold.fct_rejected_trades
+where logged_at::date = current_date()
+group by 1, 2, 3;
+
+-- Now iterate freely against it in the same session without re-scanning GOLD:
+select reject_reason, count(*) from tmp_todays_rejects group by 1 order by 2 desc;
+select * from tmp_todays_rejects where message_count > 1;
+-- No DROP needed -- it disappears when this session closes.
+
 
 -- =============================================================================
 -- 2. TIME TRAVEL & UNDROP
@@ -132,38 +149,38 @@ order by start_time desc;
 -- 2.1 See a table as of N minutes ago — e.g. to compare before/after a
 -- suspect dbt run.
 select *
-from trade_analytics.gold.valid_trades
+from trade_analytics.gold.fct_valid_trades
 at (offset => -60*30); -- 30 minutes ago
 
 -- 2.2 See a table as of a specific timestamp.
 select *
-from trade_analytics.gold.valid_trades
+from trade_analytics.gold.fct_valid_trades
 at (timestamp => '2026-08-27 12:00:00 -07:00'::timestamp_tz);
 
 -- 2.3 See a table immediately before a specific statement (useful right
 -- after a bad dbt run/merge you want to diff against).
 select *
-from trade_analytics.gold.valid_trades
+from trade_analytics.gold.fct_valid_trades
 before (statement => '<QUERY_ID>');
 
 -- 2.4 Diff current state against an hour ago (e.g. sanity-check how many
 -- rows a suspicious run touched).
 select trade_id, version
-from trade_analytics.gold.valid_trades
+from trade_analytics.gold.fct_valid_trades
 minus
 select trade_id, version
-from trade_analytics.gold.valid_trades at (offset => -3600);
+from trade_analytics.gold.fct_valid_trades at (offset => -3600);
 
 -- 2.5 Restore a dropped table (Time Travel retention window applies —
 -- default 1 day on a trial account, see DATA_RETENTION_TIME_IN_DAYS).
--- undrop table trade_analytics.gold.valid_trades;
+-- undrop table trade_analytics.gold.fct_valid_trades;
 
 -- 2.6 Clone a table (or the whole schema) at a point in time — cheap,
 -- metadata-only, good for "what did GOLD look like before I broke it".
-create table if not exists trade_analytics.gold.valid_trades_clone_debug
-clone trade_analytics.gold.valid_trades
+create table if not exists trade_analytics.gold.fct_valid_trades_clone_debug
+clone trade_analytics.gold.fct_valid_trades
 at (offset => -3600);
--- drop table trade_analytics.gold.valid_trades_clone_debug; -- clean up after
+-- drop table trade_analytics.gold.fct_valid_trades_clone_debug; -- clean up after
 
 -- 2.7 How much Time Travel retention does each table actually have?
 select table_schema, table_name, retention_time
@@ -218,9 +235,9 @@ limit 20;
 
 -- 3.4 Partition pruning efficiency for a specific table — low
 -- partitions_scanned/partitions_total on a filtered query means pruning is
--- working; near-1.0 on a filtered query means it isn't (candidate for
--- clustering — see docs/SCALABILITY.md's note on clustering valid_trades /
--- int_trades_evaluated on trade_id at high volume).
+-- working; near-1.0 on a filtered query means it isn't (candidate for a
+-- clustering key -- see 3.8, which already exists on fct_valid_trades,
+-- fct_rejected_trades and BRONZE.TRADES_RAW).
 select
     query_id,
     query_text,
@@ -228,7 +245,7 @@ select
     partitions_total,
     round(partitions_scanned / nullif(partitions_total, 0), 3) as scan_ratio
 from snowflake.account_usage.query_history
-where query_text ilike '%valid_trades%'
+where query_text ilike '%fct_valid_trades%'
   and start_time > dateadd('day', -1, current_timestamp())
 order by start_time desc
 limit 20;
@@ -257,6 +274,23 @@ order by active_bytes desc;
 
 -- 3.7 Current warehouse config (size, auto-suspend, multi-cluster settings).
 show warehouses like 'TRADE_ANALYTICS_WH';
+
+-- 3.8 Clustering health for the three tables with an explicit clustering
+-- key: fct_valid_trades / fct_rejected_trades (cluster_by=maturity_date, set
+-- in their dbt config) and BRONZE.TRADES_RAW (cluster_by=to_date(loaded_at),
+-- set in terraform/main.tf). average_depth close to 1 means well-clustered;
+-- climbing over time as more data lands is the signal that re-clustering
+-- (automatic, Snowflake-managed) is earning its keep. At this project's row
+-- count these keys are illustrative -- Snowflake's automatic micro-
+-- partitioning alone would perform fine without them.
+select 'TRADE_ANALYTICS.GOLD.FCT_VALID_TRADES' as table_name,
+       system$clustering_information('TRADE_ANALYTICS.GOLD.FCT_VALID_TRADES') as clustering_info
+union all
+select 'TRADE_ANALYTICS.GOLD.FCT_REJECTED_TRADES',
+       system$clustering_information('TRADE_ANALYTICS.GOLD.FCT_REJECTED_TRADES')
+union all
+select 'TRADE_ANALYTICS.BRONZE.TRADES_RAW',
+       system$clustering_information('TRADE_ANALYTICS.BRONZE.TRADES_RAW');
 
 
 -- =============================================================================
@@ -310,16 +344,16 @@ select
     date_trunc('hour', logged_at) as hour,
     reject_reason,
     count(*) as rejects
-from trade_analytics.gold.rejected_trades
+from trade_analytics.gold.fct_rejected_trades
 group by 1, 2
 order by 1 desc;
 
 -- 4.6 End-to-end freshness check: how far behind is GOLD from the raw feed?
 select
     (select max(loaded_at) from trade_analytics.bronze.trades_raw) as latest_bronze_row,
-    (select max(processed_at) from trade_analytics.gold.valid_trades) as latest_gold_row,
+    (select max(processed_at) from trade_analytics.gold.fct_valid_trades) as latest_gold_row,
     datediff('minute',
-        (select max(processed_at) from trade_analytics.gold.valid_trades),
+        (select max(processed_at) from trade_analytics.gold.fct_valid_trades),
         (select max(loaded_at) from trade_analytics.bronze.trades_raw)
     ) as gold_lag_minutes;
 
@@ -346,7 +380,7 @@ show grants to role trade_analytics_transformer;
 select query_id, user_name, query_start_time, direct_objects_accessed
 from snowflake.account_usage.access_history
 where query_start_time > dateadd('day', -1, current_timestamp())
-  and direct_objects_accessed::string ilike '%VALID_TRADES%'
+  and direct_objects_accessed::string ilike '%FCT_VALID_TRADES%'
 order by query_start_time desc
 limit 20;
 
@@ -355,8 +389,8 @@ limit 20;
 select referencing_object_name, referencing_object_domain,
        referenced_object_name, referenced_object_domain
 from snowflake.account_usage.object_dependencies
-where referenced_object_name = 'VALID_TRADES'
-   or referencing_object_name = 'VALID_TRADES';
+where referenced_object_name = 'FCT_VALID_TRADES'
+   or referencing_object_name = 'FCT_VALID_TRADES';
 
 
 -- =============================================================================
@@ -380,4 +414,4 @@ execute task trade_analytics.bronze.ingest_trades_task;
 --   on table trade_analytics.bronze.trades_raw;
 
 -- 6.4 Clean up ad-hoc debug clones so they don't accrue storage cost.
--- drop table if exists trade_analytics.gold.valid_trades_clone_debug;
+-- drop table if exists trade_analytics.gold.fct_valid_trades_clone_debug;

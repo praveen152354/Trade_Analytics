@@ -24,8 +24,14 @@
             'version', 'maturity_date', 'notional', 'price', 'currency',
             'counterparty', 'trader', 'book', 'product_type',
         ],
+        transient=false,
     )
 }}
+
+{#- transient=false (permanent): same reasoning as fct_rejected_trades.sql
+    -- this is the point-in-time compliance history itself, not a cache of
+    something re-derivable from BRONZE, so it earns Fail-safe's extra
+    7-day recovery window. -#}
 
 select
     trade_id,
@@ -40,6 +46,6 @@ select
     trade_date,
     maturity_date,
     processed_at
-from {{ ref('valid_trades') }}
+from {{ ref('fct_valid_trades') }}
 
 {% endsnapshot %}

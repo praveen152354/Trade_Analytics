@@ -103,12 +103,12 @@ def build():
             ["TRADE_ANALYTICS", "Database", "—", "Top-level container for the whole pipeline."],
             ["BRONZE", "Schema", "TRADE_ANALYTICS", "Landing zone: raw trade files, stage, stream, tasks."],
             ["SILVER", "Schema", "TRADE_ANALYTICS", "dbt staging + business-rule evaluation (stg_trades, int_trades_evaluated)."],
-            ["GOLD", "Schema", "TRADE_ANALYTICS", "dbt marts (valid_trades, rejected_trades, trade_status) + Type 2 SCD snapshot."],
+            ["GOLD", "Schema", "TRADE_ANALYTICS", "dbt star schema: dim_* tables, fct_valid_trades, fct_rejected_trades, fct_trade_status, rpt_trade_report + Type 2 SCD snapshot."],
             ["TRADE_ANALYTICS_LOADER", "Role", "—", "Used by the standalone Python dev/test script (PUT + COPY INTO)."],
             ["TRADE_ANALYTICS_TRANSFORMER", "Role", "—", "Used by dbt (via dbt Cloud) to build every model."],
             ["TRADE_JSON_FORMAT", "File format", "BRONZE", "JSON, one object per line, used by COPY INTO."],
             ["TRADES_STAGE", "Internal stage", "BRONZE", "Trade batch files land here (genuine cloud object storage, Snowflake-managed)."],
-            ["TRADES_RAW", "Table", "BRONZE", "Insert-only landing table (raw_payload VARIANT, file_name, loaded_at)."],
+            ["TRADES_RAW", "Table", "BRONZE", "Insert-only landing table (raw_payload VARIANT, file_name, loaded_at). Permanent, cluster_by=to_date(loaded_at)."],
             ["TRADES_RAW_STREAM", "Stream", "BRONZE", "CDC stream on TRADES_RAW; consumed by dbt's stg_trades model."],
             ["GENERATE_TRADE_FILES", "Procedure (Snowpark Python)", "BRONZE", "Generates a mock trade batch, writes it as .jsonl straight to the stage."],
             ["GENERATE_TRADE_FILES_TASK", "Task", "BRONZE", "Calls the procedure every 2 min (configurable). Auto-retries 2x on failure."],
@@ -156,15 +156,18 @@ def build():
         [
             ["base_trades_raw (BRONZE)", "view", "Thin passthrough over TRADES_RAW -- documentation/lineage only, not the actual trades data path."],
             ["base_fx_rates_raw (BRONZE)", "view", "Thin passthrough over FX_RATES_RAW -- this one IS the real source silver.fx_rates builds from."],
-            ["stg_trades (SILVER)", "incremental (append)", "Flattens raw JSON from the stream into typed columns."],
-            ["int_trades_evaluated (SILVER)", "incremental (append)", "Single decision point: accepts or rejects each trade message and records why."],
-            ["fx_rates (SILVER)", "incremental (merge on as_of_date+currency)", "Deduplicates FX_RATES_RAW to one row per date+currency -- the latest loaded value."],
-            ["valid_trades (GOLD)", "incremental (merge on trade_id)", "One row per trade_id — the latest accepted version."],
-            ["rejected_trades (GOLD)", "incremental (append)", "Compliance audit log of every rejected message + reason."],
-            ["trade_status (GOLD)", "view", "valid_trades + computed ACTIVE/EXPIRED + notional_usd (convert_to_usd macro)."],
-            ["valid_trades_snapshot (GOLD)", "snapshot, check strategy", "Type 2 SCD history of valid_trades. Run monthly (1st, 01:00 UTC), not on the hourly job."],
+            ["stg_trades (SILVER)", "incremental (append), transient", "Flattens raw JSON from the stream into typed columns."],
+            ["int_trades_evaluated (SILVER)", "incremental (append), transient", "Single decision point: accepts or rejects each trade message and records why."],
+            ["fx_rates (SILVER)", "incremental (merge on as_of_date+currency), transient", "Deduplicates FX_RATES_RAW to one row per date+currency -- the latest loaded value."],
+            ["dim_trader / dim_book / dim_counterparty / dim_product / dim_currency (GOLD)", "table, full-refresh, transient", "One row per distinct value ever seen in int_trades_evaluated (accepted or rejected). Surrogate key via dbt_utils.generate_surrogate_key()."],
+            ["dim_date (GOLD)", "table, full-refresh, transient", "Standard Kimball date dimension via dbt_utils.date_spine() (2024-01-01 to 2031-12-31)."],
+            ["fct_valid_trades (GOLD)", "incremental (merge on trade_id), transient, cluster_by=maturity_date", "One row per trade_id -- the latest accepted version -- joined out to every dim_* table for surrogate-key FKs."],
+            ["fct_rejected_trades (GOLD)", "incremental (append), PERMANENT, cluster_by=maturity_date", "Compliance audit log of every rejected message + reason, with the same dimensional FKs."],
+            ["fct_trade_status (GOLD)", "view", "fct_valid_trades + computed ACTIVE/EXPIRED + notional_usd (convert_to_usd macro)."],
+            ["rpt_trade_report (GOLD)", "view", "Flat reporting layer: fct_trade_status pre-joined to dim_date (trade + maturity date). What the dashboard queries -- no joins needed."],
+            ["valid_trades_snapshot (GOLD)", "snapshot, check strategy, PERMANENT", "Type 2 SCD history of fct_valid_trades. Run monthly (1st, 01:00 UTC), not on the hourly job."],
         ],
-        col_widths=[1.9, 1.8, 3.3],
+        col_widths=[1.9, 2.3, 2.8],
     )
 
     doc.add_paragraph(
@@ -172,10 +175,51 @@ def build():
         "re-uploaded under the same name as new rather than overwriting, so "
         "a corrected rate file can legitimately create a second row for the "
         "same (as_of_date, currency) in FX_RATES_RAW. fx_rates resolves it "
-        "with the same merge-on-latest pattern as valid_trades -- verified "
+        "with the same merge-on-latest pattern as fct_valid_trades -- verified "
         "live by deliberately re-uploading an edited rate file and "
         "confirming BRONZE kept both rows (for audit) while SILVER showed "
         "only the latest."
+    )
+
+    add_h2(doc, "2a. The GOLD star schema, and why some tables are permanent")
+    doc.add_paragraph(
+        "fct_valid_trades and fct_rejected_trades carry a surrogate-key "
+        "foreign column for every dim_* table (trader_key, book_key, "
+        "counterparty_key, product_key, currency_key, trade_date_key, "
+        "maturity_date_key). gold.yml tests every one of those FKs with a "
+        "relationships test against its dimension's key -- 68 tests total, "
+        "up from 19 before this redesign. The natural-key text columns "
+        "(trader, book, counterparty, product_type, currency) are kept on "
+        "the facts too, alongside the *_key columns -- a deliberate "
+        "denormalization for a handful of small, fixed-vocabulary codes, "
+        "so a simple query doesn't have to join every dimension just to "
+        "read them."
+    )
+    doc.add_paragraph(
+        "dbt-snowflake defaults every table/incremental model to TRANSIENT "
+        "(no Fail-safe storage) unless told otherwise. Most models here "
+        "leave that default in place -- explicit now, via transient=true -- "
+        "because they're a pure function of BRONZE (permanent) plus the "
+        "current dbt SQL: if lost, dbt run regenerates them exactly, so "
+        "Fail-safe's extra 7-day recovery window would be cost with no "
+        "benefit. fct_rejected_trades and valid_trades_snapshot are the "
+        "deliberate exception (transient=false): both are point-in-time "
+        "compliance records of what business logic decided when a message "
+        "or a snapshot ran -- if the rules ever change later, replaying "
+        "BRONZE would apply new rules to old messages and silently rewrite "
+        "audit history, so these two earn the extra protection a real "
+        "audit record deserves."
+    )
+    doc.add_paragraph(
+        "fct_valid_trades, fct_rejected_trades, and BRONZE.TRADES_RAW carry "
+        "explicit clustering keys (cluster_by) on maturity_date / "
+        "to_date(loaded_at) respectively -- illustrative at this project's "
+        "row count, but aimed at the exact query pattern rpt_trade_report's "
+        "dashboard filter uses (a maturity-date range). "
+        "snowflake_sql/observability_toolkit.sql checks clustering health "
+        "via SYSTEM$CLUSTERING_INFORMATION() and demonstrates a TEMPORARY "
+        "table for session-scoped ad-hoc debugging that needs no manual "
+        "cleanup."
     )
 
     add_table(
@@ -185,9 +229,9 @@ def build():
             ["Lower version than existing", "REJECTED — reason STALE_VERSION_LOWER_THAN_EXISTING"],
             ["Same version as existing", "ACCEPTED — merges in, replacing the row"],
             ["Maturity date already in the past", "REJECTED — reason MATURITY_DATE_IN_PAST"],
-            ["Maturity date passes after acceptance", "trade_status view marks it EXPIRED (computed, not mutated)"],
+            ["Maturity date passes after acceptance", "fct_trade_status view marks it EXPIRED (computed, not mutated)"],
             ["Two versions of one trade in the same batch", "Highest version ACCEPTED; the other REJECTED as SUPERSEDED_IN_BATCH"],
-            ["Any rejection", "Logged to rejected_trades — append-only audit trail"],
+            ["Any rejection", "Logged to fct_rejected_trades — append-only audit trail"],
         ],
         col_widths=[3.5, 3.5],
     )
@@ -211,13 +255,15 @@ def build():
             ["dbt/trade_analytics/models/silver/int_trades_evaluated.sql", "All business-rule logic (accept/reject + reason)."],
             ["dbt/trade_analytics/models/silver/fx_rates.sql", "Merge-dedup of FX_RATES_RAW -- see section 2."],
             ["dbt/trade_analytics/macros/convert_to_usd.sql", "Currency-conversion macro: loops over an FX-rate var to build a CASE expression."],
-            ["dbt/trade_analytics/snapshots/valid_trades_snapshot.sql", "Type 2 SCD snapshot of the trade book, run monthly."],
-            ["dbt/trade_analytics/models/gold/valid_trades.sql", "Merge-incremental table of current accepted trades."],
-            ["dbt/trade_analytics/models/gold/rejected_trades.sql", "Append-only rejected-trade audit log."],
-            ["dbt/trade_analytics/models/gold/trade_status.sql", "View computing ACTIVE/EXPIRED status + notional_usd."],
+            ["dbt/trade_analytics/snapshots/valid_trades_snapshot.sql", "Type 2 SCD snapshot of the trade book, run monthly. Permanent table."],
+            ["dbt/trade_analytics/models/gold/dim_trader.sql, dim_book.sql, dim_counterparty.sql, dim_product.sql, dim_currency.sql, dim_date.sql", "The six GOLD dimensions -- see section 2a."],
+            ["dbt/trade_analytics/models/gold/fct_valid_trades.sql", "Merge-incremental table of current accepted trades, FK'd to every dimension."],
+            ["dbt/trade_analytics/models/gold/fct_rejected_trades.sql", "Append-only rejected-trade audit log, FK'd to every dimension. Permanent table."],
+            ["dbt/trade_analytics/models/gold/fct_trade_status.sql", "View computing ACTIVE/EXPIRED status + notional_usd."],
+            ["dbt/trade_analytics/models/gold/rpt_trade_report.sql", "Flat reporting view -- what dashboard/streamlit_app.py queries."],
             ["dbt Cloud (external, not a repo file)", "Hourly job: dbt run then dbt test. Separate monthly job: dbt snapshot. Reads this repo via a read-only deploy key; separate Development and Production environments."],
             ["orchestration/airflow/ (alternative)", "Complete Docker Compose Airflow stack, documented but not the primary orchestration path."],
-            ["dashboard/streamlit_app.py", "Optional Streamlit dashboard over trade_status and rejected_trades."],
+            ["dashboard/streamlit_app.py", "Streamlit report over rpt_trade_report, with sidebar filters (trader, book, counterparty, product, currency, status, maturity date range) and a rejected-trades breakdown."],
             ["snowflake_sql/observability_toolkit.sql", "Ready-to-run debugging, time-travel, optimization and monitoring queries."],
             [".github/workflows/dbt_ci.yml, terraform_ci.yml", "CI/CD: dbt build/test on PR + merge; terraform fmt/validate/plan on PR, apply on manual dispatch (sequenced after plan to avoid an S3 state-lock race -- both verified live)."],
             ["docs/SETUP_GUIDE.md, VALIDATION_LOGIC.md, SCALABILITY.md", "Step-by-step setup, rule-by-rule rationale, and the failure-handling / monitoring / 10,000x-scale write-up."],
@@ -249,11 +295,21 @@ def build():
         "                                                  |      hourly job)\n"
         "                                        int_trades_evaluated\n"
         "                                              /            \\\n"
-        "                                   valid_trades          rejected_trades\n"
+        "                              fct_valid_trades          fct_rejected_trades\n"
+        "                              (FK'd to dim_trader,       (same FKs, PERMANENT,\n"
+        "                               dim_book, dim_counter-     compliance audit log)\n"
+        "                               party, dim_product,\n"
+        "                               dim_currency, dim_date)\n"
         "                                    /        \\\n"
-        "                          trade_status   valid_trades_snapshot\n"
-        "                          (view, incl.    (Type 2 SCD, dbt Cloud\n"
-        "                           notional_usd)   monthly job: 1st, 01:00 UTC)\n"
+        "                        fct_trade_status   valid_trades_snapshot\n"
+        "                        (view, incl.        (Type 2 SCD, PERMANENT,\n"
+        "                         notional_usd)        dbt Cloud monthly job)\n"
+        "                              |\n"
+        "                       rpt_trade_report  (flat, pre-joined --\n"
+        "                              |            what the dashboard queries)\n"
+        "                              v\n"
+        "                    Streamlit dashboard (filters: trader, book,\n"
+        "                    counterparty, product, currency, status, maturity range)\n"
         "\n"
         "Manual upload --> S3 (fx_rates/) --> FX_RATES_STAGE\n"
         "                                          |  polls, once daily\n"

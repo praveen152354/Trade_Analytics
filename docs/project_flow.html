@@ -222,13 +222,26 @@
 
 <div class="component">
   <div class="comp-head"><span class="comp-icon">🥇</span><h3>GOLD — Business-Ready Tables</h3><span class="layer-tag tag-gold">gold</span></div>
-  <p>Three tables, each with one clear job:</p>
+  <p>Three core tables, each with one clear job:</p>
   <table class="glossary">
-    <tr><td><code>valid_trades</code></td><td>The current, accepted state of every trade — one row per trade, always the latest version.</td></tr>
-    <tr><td><code>rejected_trades</code></td><td>A permanent audit log of every trade that was turned away and why — needed for compliance, never edited or deleted.</td></tr>
-    <tr><td><code>trade_status</code></td><td>A friendlier view for reporting: adds "Active" or "Expired" (worked out fresh every time it's queried, from today's date vs. the maturity date — not a stored flag that could go stale) and converts each trade's amount into US dollars.</td></tr>
+    <tr><td><code>fct_valid_trades</code></td><td>The current, accepted state of every trade — one row per trade, always the latest version.</td></tr>
+    <tr><td><code>fct_rejected_trades</code></td><td>A permanent audit log of every trade that was turned away and why — needed for compliance, never edited or deleted.</td></tr>
+    <tr><td><code>fct_trade_status</code></td><td>A friendlier view for reporting: adds "Active" or "Expired" (worked out fresh every time it's queried, from today's date vs. the maturity date — not a stored flag that could go stale) and converts each trade's amount into US dollars.</td></tr>
   </table>
   <div class="why"><b>Why compute "Expired" on the fly instead of storing it?</b> A trade's expiry status changes automatically as time passes — there's no button anyone presses. Computing it at read-time means it's always correct, with no separate job needed to "remember" to update it.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🗂️</span><h3>The Dimension Tables (Star Schema)</h3><span class="layer-tag tag-gold">gold</span></div>
+  <p>Six small lookup tables sit alongside the two tables above: one each for trader, book, counterparty, product type, currency, and calendar date. Every trade in <code>fct_valid_trades</code>/<code>fct_rejected_trades</code> points at a row in each of these instead of just repeating the plain text — "trader_d" is really a link to a row in the trader lookup table, not just a string typed in six different places.</p>
+  <div class="why"><b>Why bother, if the plain text was already there?</b> This is a standard reporting-database pattern called a <b>star schema</b>. It lets tools double-check that every trade actually points at a <i>real</i> trader/book/counterparty (a "does this link actually go anywhere" test, which this project now runs automatically), and it's the shape most BI/reporting tools expect. The plain-text version is deliberately kept too, side by side, so a simple question doesn't require following the links.</div>
+  <div class="analogy">Like a form with a dropdown list instead of a free-text box: picking "Barclays" from a dropdown guarantees it's a real, known counterparty, rather than trusting that everyone typed the name identically every time.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">📋</span><h3>The Reporting Layer</h3><span class="layer-tag tag-gold">gold</span></div>
+  <p>One more table, <code>rpt_trade_report</code>, flattens everything above into a single, wide table built specifically for reporting: every trade attribute already spelled out as plain text, plus handy extras like "which quarter did this trade mature in" and "how many days until maturity." Nobody using this table has to know the star-schema link structure underneath it at all.</p>
+  <div class="why"><b>Why a separate table just for this?</b> The star schema (previous section) is great for a BI tool that already knows how to follow links, but it's awkward for a quick filter-and-look dashboard. This table exists purely so that job is a single flat query, with no links to follow.</div>
 </div>
 
 <div class="component">
@@ -269,8 +282,16 @@
 </div>
 
 <div class="component">
+  <div class="comp-head"><span class="comp-icon">🗄️</span><h3>Permanent vs. Disposable Tables, and Sorting the Data Ahead of Time</h3><span class="layer-tag tag-support">supporting</span></div>
+  <p>Snowflake offers a cheaper table option that skips an extra 7-day safety-net backup — fine for anything that can be perfectly regenerated from earlier data, wasteful for anything that can't. Most tables in this pipeline use the cheaper option, since they can always be rebuilt from Bronze. Two are deliberately kept on the full-price option instead: the rejected-trades audit log and the monthly history snapshot — both are a record of "what was decided at the time," which literally cannot be perfectly recreated later if the business rules ever change.</p>
+  <p>Separately, the biggest tables are told to keep themselves roughly sorted by maturity date as new data arrives, so a report asking "trades maturing in the next 90 days" doesn't have to look through the whole table to find them.</p>
+  <div class="why"><b>Why does this matter at such a small scale?</b> It doesn't, yet — this project is far too small to actually need either of these. They're set up anyway, correctly and deliberately, so the choice is documented and ready for the day the data is 10,000x bigger, rather than being retrofitted under pressure later.</div>
+  <div class="analogy">Like paying for extra insurance only on the one filing cabinet that holds originals you could never reprint, and keeping the archive roughly filed by date so nobody has to search box by box.</div>
+</div>
+
+<div class="component">
   <div class="comp-head"><span class="comp-icon">📊</span><h3>Dashboard (Optional)</h3><span class="layer-tag tag-support">supporting</span></div>
-  <p>A simple web page that queries the Gold tables directly and shows, at a glance, how many trades are active vs. expired, and why trades have been rejected recently. It's optional and separate from the pipeline itself — it's a consumer of Gold data, not a part of building it.</p>
+  <p>A simple web page that queries the reporting table directly and shows, at a glance, how many trades are active vs. expired, and why trades have been rejected recently — with filters down the side (trader, book, counterparty, product, currency, status, and a maturity-date range) so a user can narrow the view to exactly the trades they care about. It's optional and separate from the pipeline itself — it's a consumer of Gold data, not a part of building it.</p>
 </div>
 
 <!-- ================= GLOSSARY ================= -->
@@ -281,6 +302,8 @@
   <tr><td>Task</td><td>A built-in Snowflake schedule that runs a piece of SQL (or calls a procedure) automatically, on a timer — Snowflake's version of a cron job.</td></tr>
   <tr><td>Macro</td><td>A reusable, parameterized snippet of code (in dbt) — write the logic once, use it in many places, change it in one place.</td></tr>
   <tr><td>Type 2 SCD (Slowly Changing Dimension)</td><td>A way of keeping full history instead of only "right now" — every change gets a new row with a start/end date, rather than overwriting the old value.</td></tr>
+  <tr><td>Star schema / Fact &amp; dimension tables</td><td>A standard reporting-database layout: small lookup tables ("dimensions," e.g. traders) linked to a central table of events/records ("facts," e.g. trades) instead of repeating descriptive text everywhere.</td></tr>
+  <tr><td>Clustering key</td><td>A hint telling a table to keep itself roughly sorted by a column that's filtered on often, so queries can skip straight to the relevant portion instead of scanning everything.</td></tr>
   <tr><td>Storage Integration</td><td>Snowflake's secure way of connecting to a cloud storage bucket (like S3) using a trusted role instead of a stored password/key.</td></tr>
   <tr><td>IaC (Infrastructure as Code)</td><td>Describing infrastructure (servers, tables, permissions) in code files instead of clicking through a web console, so it's repeatable and version-controlled.</td></tr>
   <tr><td>CI/CD</td><td>Automated checks and deployments triggered by code changes — "Continuous Integration / Continuous Delivery."</td></tr>

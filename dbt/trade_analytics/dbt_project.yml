@@ -47,3 +47,8 @@ vars:
     JPY: 0.0067
     CHF: 1.12
     AUD: 0.65
+
+  # Bounds for dim_date's date_spine. Generous on purpose: trade_date is
+  # "whenever the generator ran" and maturity_date can be up to ~2 years out.
+  date_dim_start_date: '2024-01-01'
+  date_dim_end_date: '2031-12-31'

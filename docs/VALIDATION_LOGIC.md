@@ -4,22 +4,25 @@
 
 All rule logic is centralized in one place — `models/intermediate/int_trades_evaluated.sql`
 — so there is exactly one definition of "accepted" vs "rejected" instead of the
-logic being duplicated/drifting across `valid_trades` and `rejected_trades`.
+logic being duplicated/drifting across `fct_valid_trades` and `fct_rejected_trades`.
 
 | # | Rule | Implementation |
 |---|------|-----------------|
 | 1 | Reject trades with a lower version than existing | `existing_version is not null and version < existing_version` → `decision = 'REJECTED'`, reason `STALE_VERSION_LOWER_THAN_EXISTING`. `existing_version` is the max version ever accepted for that `trade_id`, looked up from the model's own history. |
-| 2 | Replace trades with the same version | Same/higher version passes the check above → `ACCEPTED`. `valid_trades` is an incremental **merge** keyed on `trade_id`, so an accepted same-version message overwrites the existing row rather than inserting a duplicate. |
+| 2 | Replace trades with the same version | Same/higher version passes the check above → `ACCEPTED`. `fct_valid_trades` is an incremental **merge** keyed on `trade_id`, so an accepted same-version message overwrites the existing row rather than inserting a duplicate. |
 | 3 | Reject trades with a maturity date earlier than today | `maturity_date < current_date()` → `REJECTED`, reason `MATURITY_DATE_IN_PAST`. Evaluated once, at ingestion time. |
-| 4 | Mark trades as expired if the maturity date has passed | Deliberately **not** a mutation. `trade_status` is a view over `valid_trades` with `case when maturity_date < current_date() then 'EXPIRED' else 'ACTIVE' end`. A trade's expiry is a pure function of its maturity date and today's date, so recomputing it on read is always correct and requires no scheduled UPDATE job (see docs/SCALABILITY.md for the tradeoff at very high volume). |
+| 4 | Mark trades as expired if the maturity date has passed | Deliberately **not** a mutation. `fct_trade_status` is a view over `fct_valid_trades` with `case when maturity_date < current_date() then 'EXPIRED' else 'ACTIVE' end`. A trade's expiry is a pure function of its maturity date and today's date, so recomputing it on read is always correct and requires no scheduled UPDATE job (see docs/SCALABILITY.md for the tradeoff at very high volume). |
 | 5 | (Optional) extra rule I added | Same-batch supersession: if two messages for the same `trade_id` arrive in one run, only the highest version is a candidate for acceptance — the rest are logged as rejected (`SUPERSEDED_IN_BATCH`) instead of being silently dropped. Realistic for a trade feed where amendments can arrive faster than the batch cadence. |
-| 6 | Log rejected trades for audit | `rejected_trades` is an append-only table, `unique_key = message_id`, never updated or deleted. `int_trades_evaluated` itself is also append-only and additionally records every **accepted** decision, so it doubles as a full decision audit trail (not just rejects) if compliance ever needs "why was this trade accepted at this version". |
+| 6 | Log rejected trades for audit | `fct_rejected_trades` is an append-only table, `unique_key = message_id`, never updated or deleted. `int_trades_evaluated` itself is also append-only and additionally records every **accepted** decision, so it doubles as a full decision audit trail (not just rejects) if compliance ever needs "why was this trade accepted at this version". |
 
-## The three-layer dbt DAG
+## The GOLD star schema and dbt DAG
 
 ```
-stg_trades  ->  int_trades_evaluated  ->  valid_trades
-                                      \->  rejected_trades  ->  trade_status (view)
+stg_trades -> int_trades_evaluated -> fct_valid_trades ---> fct_trade_status -> rpt_trade_report
+                                   \-> fct_rejected_trades        ^
+                                                                   |
+                              dim_trader, dim_book, dim_counterparty,
+                                dim_product, dim_currency, dim_date
 ```
 
 - **`stg_trades`** (incremental, append) — flattens the raw JSON `VARIANT`
@@ -32,15 +35,34 @@ stg_trades  ->  int_trades_evaluated  ->  valid_trades
 - **`int_trades_evaluated`** (incremental, append, `unique_key=message_id`) —
   the single decision point described above. It self-references `{{ this }}`
   to look up each trade's current accepted version, which is what lets
-  `valid_trades` depend on it without creating a `ref()` cycle.
-- **`valid_trades`** (incremental, `merge` on `trade_id`) — current state,
-  one row per trade.
-- **`rejected_trades`** (incremental, append) — the compliance audit log.
-- **`trade_status`** (view) — `valid_trades` plus the computed
-  ACTIVE/EXPIRED column and `notional_usd` (via `convert_to_usd()`); this is
-  what the dashboard and any downstream reporting should query.
+  `fct_valid_trades` depend on it without creating a `ref()` cycle.
+- **`dim_trader` / `dim_book` / `dim_counterparty` / `dim_product` /
+  `dim_currency`** (table, full-refresh) — one row per distinct value ever
+  seen in `int_trades_evaluated` (accepted *or* rejected, so a
+  counterparty that only ever appears on a rejected message still gets a
+  row), with a surrogate key via `dbt_utils.generate_surrogate_key()`.
+  Small, fixed-vocabulary reference data — cheap to rebuild in full every
+  run, no incremental logic needed.
+- **`dim_date`** (table, full-refresh) — a standard Kimball date dimension
+  built with `dbt_utils.date_spine()`, bounded by the
+  `date_dim_start_date`/`date_dim_end_date` vars in `dbt_project.yml`.
+- **`fct_valid_trades`** (incremental, `merge` on `trade_id`) — current
+  state, one row per trade, joined out to every `dim_*` table for
+  surrogate-key FKs (`trader_key`, `book_key`, `counterparty_key`,
+  `product_key`, `currency_key`, `trade_date_key`, `maturity_date_key`).
+  The natural-key text columns are kept alongside the FKs — see the
+  "GOLD star schema" section of the top-level README for why.
+- **`fct_rejected_trades`** (incremental, append) — the compliance audit
+  log, with the same dimensional FKs as `fct_valid_trades`.
+- **`fct_trade_status`** (view) — `fct_valid_trades` plus the computed
+  ACTIVE/EXPIRED column and `notional_usd` (via `convert_to_usd()`).
+- **`rpt_trade_report`** (view) — the flat reporting layer: `fct_trade_status`
+  joined to `dim_date` twice (trade date and maturity date), with every
+  filterable attribute already denormalized into plain columns. This is
+  what `dashboard/streamlit_app.py` and any downstream BI tool should
+  query — no joins required.
 - **`valid_trades_snapshot`** (dbt snapshot, `check` strategy, Type 2 SCD) —
-  a point-in-time history of `valid_trades`. Unlike the models above it
+  a point-in-time history of `fct_valid_trades`. Unlike the models above it
   isn't part of the hourly `dbt run`; it's invoked separately (`dbt
   snapshot`) on a month-end schedule, since its purpose is capturing
   end-of-month positions for compliance/reporting, not tracking every
@@ -70,7 +92,7 @@ INTO` treats it as new and loads it again rather than overwriting, so the
 same `(as_of_date, currency)` can legitimately appear more than once in
 BRONZE. `silver.fx_rates` resolves that: a merge-on-latest incremental
 model (`unique_key=['as_of_date', 'currency']`), the exact same pattern as
-`valid_trades`, just keyed differently. Querying `silver.fx_rates` always
+`fct_valid_trades`, just keyed differently. Querying `silver.fx_rates` always
 returns one current row per date+currency; `BRONZE.FX_RATES_RAW` keeps
 every version ever loaded, for audit.
 

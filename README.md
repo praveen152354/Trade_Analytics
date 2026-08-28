@@ -38,7 +38,32 @@ volume. The architecture diagram source is
 |---|---|---|
 | Bronze | `BRONZE` | Raw landing: `TRADES_RAW`/`FX_RATES_RAW` tables, `TRADES_STAGE` internal stage + `FX_RATES_STAGE` external (S3) stage, `TRADES_RAW_STREAM` CDC stream, the `GENERATE_TRADE_FILES` procedure, three orchestration Tasks — plus `base_trades_raw`/`base_fx_rates_raw`, thin dbt passthrough views that give BRONZE a real, browsable node in the lineage graph. |
 | Silver | `SILVER` | `stg_trades` + `int_trades_evaluated` (business-rule decisions for trades), and `fx_rates` (merge-dedup of `FX_RATES_RAW` down to one row per date+currency) — cleansed, conformed, not yet business-facing. |
-| Gold | `GOLD` | `valid_trades`, `rejected_trades`, `trade_status` (marts), and `valid_trades_snapshot` (Type 2 SCD history). Business-consumable. |
+| Gold | `GOLD` | A proper Kimball star: six `dim_*` tables (trader/book/counterparty/product/currency/date), `fct_valid_trades` / `fct_rejected_trades` (facts, FK'd to every dim), `fct_trade_status` (the ACTIVE/EXPIRED + notional_usd view), `rpt_trade_report` (flat, pre-joined reporting view — see "Reporting layer" below), and `valid_trades_snapshot` (Type 2 SCD history). Business-consumable. |
+
+### The GOLD star schema
+
+`fct_valid_trades` and `fct_rejected_trades` carry a surrogate-key foreign
+column (`trader_key`, `book_key`, `counterparty_key`, `product_key`,
+`currency_key`, `trade_date_key`, `maturity_date_key`) for every `dim_*`
+table, generated via `dbt_utils.generate_surrogate_key()` on the dimension
+side and `dbt_utils.date_spine()` for `dim_date`. `gold.yml` tests every one
+of those FKs with a `relationships` test against its dimension's key — real
+referential-integrity checks that weren't possible before this redesign.
+The natural-key text columns (`trader`, `book`, `counterparty`,
+`product_type`, `currency`) are deliberately kept on the facts too, right
+alongside the `_key` columns — a small, fixed-vocabulary denormalization so
+a simple query (or the `convert_to_usd()` macro, which needs a real currency
+code) doesn't have to join every dimension just to read them.
+
+### Reporting layer
+
+`rpt_trade_report` (`models/gold/rpt_trade_report.sql`) sits on top of the
+star schema: `fct_trade_status` joined to `dim_date` twice (trade date and
+maturity date), with every filterable attribute already flattened into
+plain columns — no joins required by a BI tool or a dashboard. It's what
+`dashboard/streamlit_app.py` queries, with sidebar filters (trader, book,
+counterparty, product type, currency, status, maturity date range) applied
+against it.
 
 dbt's own folder convention (`models/bronze/`, `models/silver/`,
 `models/gold/`) matches the physical schemas 1:1 in this project, though
@@ -59,7 +84,12 @@ Snowflake Task (every 5 min, configurable)
   -> COPY INTO BRONZE.TRADES_RAW FROM @BRONZE.TRADES_STAGE
        |
 BRONZE.TRADES_RAW --(stream)--> dbt (scheduled hourly via dbt Cloud):
-  stg_trades -> int_trades_evaluated -> valid_trades / rejected_trades -> trade_status
+  stg_trades -> int_trades_evaluated -> fct_valid_trades / fct_rejected_trades (FK'd to dim_*)
+                                              |                        |
+                                       fct_trade_status          dim_trader, dim_book,
+                                              |                  dim_counterparty, dim_product,
+                                       rpt_trade_report           dim_currency, dim_date
+                                       (dashboard, filters)
                                               |
                               dbt Cloud (monthly, 1st @ 01:00 UTC):
                               valid_trades_snapshot (Type 2 SCD, dbt snapshot)
@@ -80,10 +110,10 @@ Business rules (all applied in `int_trades_evaluated`, see
 2. A same-version message replaces the existing row (merge on `trade_id`).
 3. Reject a trade whose maturity date is already in the past.
 4. A valid trade is marked `EXPIRED` once its maturity date passes
-   (computed dynamically in the `trade_status` view).
+   (computed dynamically in the `fct_trade_status` view).
 5. Added rule: a trade superseded by a newer version within the same batch
    is logged as rejected rather than silently dropped.
-6. Every rejection is written to `rejected_trades`, an append-only
+6. Every rejection is written to `fct_rejected_trades`, an append-only
    compliance audit log.
 
 ## dbt features on display
@@ -92,7 +122,7 @@ Business rules (all applied in `int_trades_evaluated`, see
   watermark pattern — see `models/silver/int_trades_evaluated.sql`.
 - **A custom macro**, `macros/convert_to_usd.sql`: loops over the
   `fx_rates_to_usd` var in `dbt_project.yml` to generate a currency-CASE
-  expression, used in `trade_status` to produce `notional_usd`. Change a
+  expression, used in `fct_trade_status` to produce `notional_usd`. Change a
   rate (or add a currency) in one place in `dbt_project.yml` and every call
   site picks it up — no SQL edits.
 - **A Type 2 SCD snapshot**, `snapshots/valid_trades_snapshot.sql` —
@@ -105,9 +135,37 @@ Business rules (all applied in `int_trades_evaluated`, see
 - **Custom schema macro** (`macros/get_custom_schema_name.sql`) so model
   schema config maps directly onto the medallion schemas instead of dbt's
   default `<target_schema>_<custom>` concatenation.
-- **Singular + generic tests**: 19 tests across `not_null`/`unique`/
-  `accepted_values` plus one hand-written invariant check
+- **Singular + generic tests**: 68 tests across `not_null`/`unique`/
+  `accepted_values`/`relationships` plus one hand-written invariant check
   (`tests/assert_no_trade_in_both_valid_and_rejected.sql`).
+
+## Transient vs. permanent tables, and clustering keys
+
+dbt-snowflake defaults every table/incremental model to `TRANSIENT` (no
+Fail-safe storage) unless told otherwise. Most of this project's SILVER and
+GOLD objects leave that default as-is, made explicit via `transient=true`
+in each model's `config()`: they're a pure function of `BRONZE` (permanent)
+plus the current dbt SQL, so if lost, `dbt run` regenerates them exactly —
+Fail-safe's extra 7-day recovery window would be cost with no benefit.
+
+`fct_rejected_trades` and `valid_trades_snapshot` are the deliberate
+exception: `transient=false`. Both are point-in-time compliance records —
+what business logic decided *at the moment* a message arrived or a snapshot
+ran. If dbt's rules change later, replaying `BRONZE` would apply the *new*
+rules to *old* messages and silently rewrite audit history, so these two
+earn the extra Fail-safe protection a real audit record deserves.
+
+`fct_valid_trades`, `fct_rejected_trades` (`cluster_by=['maturity_date']`,
+in their dbt `config()`) and `BRONZE.TRADES_RAW` (`cluster_by =
+["to_date(loaded_at)"]`, in `terraform/main.tf`) carry explicit clustering
+keys — illustrative at this project's row count (Snowflake's automatic
+micro-partitioning already handles a table this small), but real once
+either table is large enough that a maturity-date-range report or a
+by-day ingestion query would otherwise scan most of the table's
+partitions. `snowflake_sql/observability_toolkit.sql` §3.8 checks
+clustering health via `SYSTEM$CLUSTERING_INFORMATION()`, and §1.9
+demonstrates a `TEMPORARY` table for session-scoped ad-hoc debugging that
+needs no manual cleanup.
 
 ## Orchestration
 

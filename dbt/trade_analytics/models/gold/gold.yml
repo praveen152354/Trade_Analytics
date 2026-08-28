@@ -1,8 +1,98 @@
 version: 2
 
 models:
-  - name: valid_trades
-    description: One row per trade_id — the latest accepted version.
+  # ---------------------------------------------------------------------
+  # Dimensions -- small, fixed-vocabulary reference tables, full-refreshed
+  # every run. Sourced from int_trades_evaluated so a value that only ever
+  # appears on a rejected message still gets a row.
+  # ---------------------------------------------------------------------
+  - name: dim_trader
+    description: One row per distinct trader ever seen on an inbound trade message.
+    columns:
+      - name: trader_key
+        description: Surrogate key (dbt_utils.generate_surrogate_key on trader_name).
+        data_tests:
+          - not_null
+          - unique
+      - name: trader_name
+        data_tests:
+          - not_null
+          - unique
+
+  - name: dim_book
+    description: One row per distinct book ever seen on an inbound trade message.
+    columns:
+      - name: book_key
+        data_tests:
+          - not_null
+          - unique
+      - name: book_name
+        data_tests:
+          - not_null
+          - unique
+
+  - name: dim_counterparty
+    description: One row per distinct counterparty ever seen on an inbound trade message.
+    columns:
+      - name: counterparty_key
+        data_tests:
+          - not_null
+          - unique
+      - name: counterparty_name
+        data_tests:
+          - not_null
+          - unique
+
+  - name: dim_product
+    description: One row per distinct product type ever seen on an inbound trade message.
+    columns:
+      - name: product_key
+        data_tests:
+          - not_null
+          - unique
+      - name: product_type
+        data_tests:
+          - not_null
+          - unique
+
+  - name: dim_currency
+    description: >
+      One row per distinct currency code ever seen on an inbound trade
+      message. Just the code -- FX rate lookups stay in convert_to_usd(),
+      a separate concern from "what currencies exist".
+    columns:
+      - name: currency_key
+        data_tests:
+          - not_null
+          - unique
+      - name: currency_code
+        data_tests:
+          - not_null
+          - unique
+
+  - name: dim_date
+    description: >
+      Standard Kimball date dimension built with dbt_utils.date_spine,
+      bounded by the date_dim_start_date/date_dim_end_date vars.
+    columns:
+      - name: date_key
+        data_tests:
+          - not_null
+          - unique
+      - name: date_day
+        data_tests:
+          - not_null
+          - unique
+
+  # ---------------------------------------------------------------------
+  # Facts
+  # ---------------------------------------------------------------------
+  - name: fct_valid_trades
+    description: >
+      One row per trade_id -- the latest accepted version -- joined out to
+      every gold dimension for surrogate-key foreign keys. Natural-key text
+      columns (trader, book, counterparty, product_type, currency) are kept
+      alongside the *_key columns; see the comment at the top of the model.
     columns:
       - name: trade_id
         data_tests:
@@ -14,9 +104,53 @@ models:
       - name: maturity_date
         data_tests:
           - not_null
+      - name: trader_key
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_trader')
+              field: trader_key
+      - name: book_key
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_book')
+              field: book_key
+      - name: counterparty_key
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_counterparty')
+              field: counterparty_key
+      - name: product_key
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_product')
+              field: product_key
+      - name: currency_key
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_currency')
+              field: currency_key
+      - name: trade_date_key
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+      - name: maturity_date_key
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
 
-  - name: rejected_trades
-    description: Append-only audit log of every rejected trade message.
+  - name: fct_rejected_trades
+    description: >
+      Append-only audit log of every rejected trade message, with the same
+      dimensional foreign keys as fct_valid_trades.
     columns:
       - name: message_id
         data_tests:
@@ -30,9 +164,16 @@ models:
                 - MATURITY_DATE_IN_PAST
                 - STALE_VERSION_LOWER_THAN_EXISTING
                 - SUPERSEDED_IN_BATCH
+      - name: trader_key
+        data_tests:
+          - relationships:
+              to: ref('dim_trader')
+              field: trader_key
 
-  - name: trade_status
-    description: valid_trades with a dynamically computed ACTIVE/EXPIRED status and notional_usd (via the convert_to_usd macro).
+  - name: fct_trade_status
+    description: >
+      fct_valid_trades with a dynamically computed ACTIVE/EXPIRED status and
+      notional_usd (via the convert_to_usd macro).
     columns:
       - name: trade_id
         data_tests:
@@ -46,5 +187,33 @@ models:
                 - ACTIVE
                 - EXPIRED
       - name: notional_usd
+        data_tests:
+          - not_null
+
+  # ---------------------------------------------------------------------
+  # Reporting layer -- flat, filter-ready, no joins required by consumers.
+  # ---------------------------------------------------------------------
+  - name: rpt_trade_report
+    description: >
+      Flat reporting view: fct_trade_status with every filterable attribute
+      already denormalized (trader/book/counterparty/product/currency as
+      text, trade/maturity year-quarter-month, days_to_maturity). What the
+      dashboard and any downstream reporting/BI tool should query.
+    columns:
+      - name: trade_id
+        data_tests:
+          - not_null
+          - unique
+      - name: trade_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              values:
+                - ACTIVE
+                - EXPIRED
+      - name: notional_usd
+        data_tests:
+          - not_null
+      - name: days_to_maturity
         data_tests:
           - not_null

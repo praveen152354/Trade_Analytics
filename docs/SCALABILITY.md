@@ -11,11 +11,13 @@
   causing a failure or a stall. Nothing in the design assumes a file will
   exist by a specific time.
 - **Data quality problems**: caught at two layers. (1) dbt `data_tests` in
-  `models/marts/marts.yml` and `models/staging/stg_trades.yml` (`not_null`,
-  `unique`, `accepted_values`) fail the dbt Cloud job and trigger its
-  configured notifications. (2) Business-rule rejects (bad version, matured
-  trade) never fail the pipeline at all — by design, they're routed to
-  `rejected_trades` as data, not errors, since a rejected trade is an
+  `models/gold/gold.yml` and `models/silver/stg_trades.yml` (68 tests:
+  `not_null`, `unique`, `accepted_values`, and — since the GOLD star-schema
+  redesign — `relationships` tests verifying every fact FK resolves to its
+  dimension) fail the dbt Cloud job and trigger its configured
+  notifications. (2) Business-rule rejects (bad version, matured trade)
+  never fail the pipeline at all — by design, they're routed to
+  `fct_rejected_trades` as data, not errors, since a rejected trade is an
   expected outcome, not a pipeline defect.
 - **Task failures**: both Snowflake Tasks have `task_auto_retry_attempts = 2`
   (automatic retry of a failed run) and `suspend_task_after_num_failures = 3`
@@ -23,8 +25,8 @@
   forever burning warehouse credits) — see `terraform/orchestration.tf`.
   `COPY INTO ... ON_ERROR = 'SKIP_FILE'` means one malformed file in a
   batch doesn't abort the whole load. dbt's own dependency graph means a
-  failure in `stg_trades` blocks `int_trades_evaluated`/`valid_trades`/
-  `rejected_trades` from running on bad input rather than silently
+  failure in `stg_trades` blocks `int_trades_evaluated`/`fct_valid_trades`/
+  `fct_rejected_trades` from running on bad input rather than silently
   processing partial data (`dbt run` stops downstream models on an upstream
   failure by default). A `snowflake_alert` (`TASK_FAILURE_ALERT`) checks
   `TASK_HISTORY` every 15 minutes and emails `alert_email` if either task
@@ -81,17 +83,20 @@ creates:
   external cloud storage instead of the Snowflake-managed stage) so
   ingestion decouples from the 5-minute Task poll entirely and scales to
   near-continuous arrival without larger/more frequent batch files.
-- **Stream/merge cost**: the `int_trades_evaluated`→`valid_trades` merge is
-  keyed on `trade_id`; at high cardinality, cluster `valid_trades` and
-  `int_trades_evaluated` on `trade_id` (or an `date_trunc` of
-  `maturity_date` for `trade_status` scans) so the merge's join and the
-  `trade_status` view's `maturity_date` filter both prune partitions
-  instead of full-scanning.
-- **`trade_status`'s computed EXPIRED column**: cheap as a view at current
-  volume. At 10,000x, if that view is queried heavily by dashboards, switch
-  it to a Snowflake **Dynamic Table** (`target_lag = '5 minutes'`) — same
-  "derived, not mutated" semantics, but materialized and incrementally
-  refreshed instead of recomputed per query.
+- **Stream/merge cost**: the `int_trades_evaluated`→`fct_valid_trades` merge
+  is keyed on `trade_id`. `fct_valid_trades` and `fct_rejected_trades`
+  already carry `cluster_by=['maturity_date']` (set in their dbt `config()`
+  — see `rpt_trade_report`'s and the dashboard's maturity-date-range filter,
+  the query pattern this key is aimed at); at high cardinality, add a
+  second key on `trade_id` for `int_trades_evaluated` too, so the merge's
+  join also prunes partitions instead of full-scanning. At this project's
+  row count both are illustrative — Snowflake's automatic
+  micro-partitioning already handles a table this small.
+- **`fct_trade_status`'s computed EXPIRED column**: cheap as a view at
+  current volume. At 10,000x, if that view is queried heavily by
+  dashboards, switch it to a Snowflake **Dynamic Table**
+  (`target_lag = '5 minutes'`) — same "derived, not mutated" semantics, but
+  materialized and incrementally refreshed instead of recomputed per query.
 - **Orchestration**: today's two Snowflake Tasks are fine at current
   volume; at 10,000x, split ingestion into multiple Tasks per
   source-system/region (Snowflake Tasks scale horizontally the same way —

@@ -1,9 +1,18 @@
 {{
   config(
     materialized='incremental',
-    on_schema_change='append_new_columns'
+    on_schema_change='append_new_columns',
+    transient=true
   )
 }}
+
+-- transient=true is dbt-snowflake's default for table/incremental models
+-- anyway (no Fail-safe storage) -- made explicit here on purpose: this
+-- table is a pure function of BRONZE.TRADES_RAW (permanent) plus this SQL,
+-- so if it were ever lost, `dbt run` regenerates it exactly. Fail-safe's
+-- extra 7-day recovery window would be cost with no real benefit. Contrast
+-- with fct_rejected_trades / valid_trades_snapshot, which are explicitly
+-- permanent for the opposite reason.
 
 -- Selecting from the stream here, as the final statement dbt wraps into an
 -- INSERT, is what consumes it and advances its offset in Snowflake. Every

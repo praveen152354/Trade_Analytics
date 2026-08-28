@@ -168,6 +168,13 @@ resource "snowflake_table" "trades_raw" {
   schema          = "BRONZE"
   comment         = "Insert-only landing table for raw trade messages."
   change_tracking = true # required by the stream Snowflake auto-enabled this when TRADES_RAW_STREAM was created; must be declared or terraform will try to turn it back off.
+  # Illustrative at this project's row count (Snowflake's automatic
+  # micro-partitioning already handles a table this small); the real payoff
+  # is at production volume, once stg_trades' stream-consuming scan and any
+  # ad-hoc "what landed on day X" query would otherwise scan most of the
+  # table's partitions. Left permanent (no transient override): this is the
+  # source-of-truth landing table everything downstream is re-derived from.
+  cluster_by = ["to_date(loaded_at)"]
 
   column {
     name = "RAW_PAYLOAD"

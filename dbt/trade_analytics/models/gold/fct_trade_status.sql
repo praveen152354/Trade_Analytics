@@ -14,19 +14,26 @@
 select
     trade_id,
     version,
+    product_key,
     product_type,
+    counterparty_key,
     counterparty,
+    trader_key,
     trader,
+    book_key,
     book,
+    currency_key,
     currency,
     notional,
     {{ convert_to_usd('notional', 'currency') }} as notional_usd,
     price,
     trade_date,
+    trade_date_key,
     maturity_date,
+    maturity_date_key,
     case
         when maturity_date < current_date() then 'EXPIRED'
         else 'ACTIVE'
     end as trade_status,
     processed_at
-from {{ ref('valid_trades') }}
+from {{ ref('fct_valid_trades') }}
