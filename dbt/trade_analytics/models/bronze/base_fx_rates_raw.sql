@@ -10,6 +10,7 @@
 -- here is a safe, idiomatic improvement: only this file ever references
 -- the bronze source directly, and everything downstream depends on the
 -- dbt model instead of reaching past it.
+-- Git Push Test
 
 select *
 from {{ source('bronze', 'fx_rates_raw') }}
