@@ -35,10 +35,11 @@ names), edit the bucket name in both `terraform/backend.tf` and
 `terraform/bootstrap_state_backend.py` to something globally unique first
 — they have to match each other exactly.
 
-`BRONZE.GENERATE_TRADE_FILES` is deployed via plain SQL rather than
-Terraform — see the comment at the top of
-`terraform/sql/generate_trade_files_procedure.sql` for why (a provider
-read-back bug for Python procedure objects).
+`BRONZE.GENERATE_TRADE_FILES` is deployed via plain SQL
+(`terraform/sql/generate_trade_files_procedure.sql`) rather than a
+Terraform resource, so its Python body stays under direct version control
+in one reviewable file. Run it once, before the first `terraform apply` —
+see that file's header comment for the exact command.
 
 ```powershell
 cp terraform.tfvars.example terraform.tfvars

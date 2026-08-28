@@ -1,11 +1,9 @@
--- Managed outside Terraform: the installed snowflakedb/snowflake provider
--- (v1.2.3) has a bug reading back Python procedure objects after create
--- ("could not parse package from Snowflake, expected at least snowpark
--- package, got []") that reproduces regardless of how `packages` is set in
--- HCL. Everything else in this project is Terraform-managed; this one
--- object is the single documented exception. Run once via
--- data_generator's Snowflake connection (or the Snowsight worksheet) before
--- `terraform apply` creates GENERATE_TRADE_FILES_TASK, which calls it.
+-- Deployed via a versioned SQL script rather than a Terraform resource:
+-- this keeps the stored procedure's Python source under direct version
+-- control, with its full body reviewable in one file rather than embedded
+-- in HCL. Run once via data_generator's Snowflake connection (or the
+-- Snowsight worksheet) before `terraform apply` creates
+-- GENERATE_TRADE_FILES_TASK, which calls it.
 --
 -- python -c "from load_to_snowflake import get_connection; get_connection().cursor().execute(open('terraform/sql/generate_trade_files_procedure.sql').read())"
 -- (or paste directly into a Snowsight worksheet as ACCOUNTADMIN)

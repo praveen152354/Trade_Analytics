@@ -8,7 +8,7 @@ resource "snowflake_stage" "dashboard_stage" {
   name     = "DASHBOARD_STAGE"
   database = snowflake_database.trade_analytics.name
   schema   = "GOLD"
-  comment  = "Holds the Streamlit app file(s) for the trade dashboard. Content (Summary.py, common.py, pages/1_Trade_Details.py, environment.yml) is PUT here outside Terraform -- same one deliberate exception as terraform/sql/generate_trade_files_procedure.sql."
+  comment  = "Holds the Streamlit app file(s) for the trade dashboard. Content (Summary.py, common.py, pages/1_Trade_Details.py, environment.yml) is PUT here, the same pattern used for the GENERATE_TRADE_FILES procedure body."
 
   depends_on = [snowflake_schema.schemas]
 }

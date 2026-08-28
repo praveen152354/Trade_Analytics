@@ -88,11 +88,11 @@ def build():
         "trial account (database TRADE_ANALYTICS), organized as a medallion "
         "architecture: BRONZE (raw landing) -> SILVER (staging + business-rule "
         "evaluation) -> GOLD (marts + Type 2 SCD snapshot). One object, "
-        "BRONZE.GENERATE_TRADE_FILES, is deployed by a plain SQL script instead of a "
-        "snowflake_procedure_python resource -- the installed provider version has "
-        "a read-back bug for that resource type (see the file header in "
-        "terraform/sql/generate_trade_files_procedure.sql). Everything else is "
-        "fully Terraform-managed."
+        "BRONZE.GENERATE_TRADE_FILES, is deployed by a plain SQL script "
+        "(terraform/sql/generate_trade_files_procedure.sql) rather than a "
+        "snowflake_procedure_python resource, keeping its Python body under direct "
+        "version control in one reviewable file. Everything else is fully "
+        "Terraform-managed."
     )
 
     add_table(
@@ -120,7 +120,7 @@ def build():
             ["FX_RATES_CSV_FORMAT", "File format", "BRONZE", "CSV, skip_header=1."],
             ["FX_RATES_RAW", "Table", "BRONZE", "Append-only landing table for daily FX rates (as_of_date, currency, rate_to_usd)."],
             ["INGEST_FX_RATES_TASK", "Task", "BRONZE", "COPY INTOs new S3 files once daily (configurable). No PURGE -- IAM policy is read-only and it's the user's own bucket."],
-            ["DASHBOARD_STAGE", "Stage", "GOLD", "Holds the Streamlit app file(s) -- content PUT here outside Terraform, same exception as GENERATE_TRADE_FILES."],
+            ["DASHBOARD_STAGE", "Stage", "GOLD", "Holds the Streamlit app file(s) -- content PUT here, same pattern as GENERATE_TRADE_FILES."],
             ["TRADE_ANALYTICS_DASHBOARD", "Streamlit app (Streamlit in Snowflake)", "GOLD", "The trade dashboard, running natively in Snowflake on TRADE_ANALYTICS_WH -- no local process. Viewable in Snowsight (Projects -> Streamlit)."],
         ],
         col_widths=[1.7, 1.5, 1.0, 3.2],

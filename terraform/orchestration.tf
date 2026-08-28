@@ -5,13 +5,11 @@
 # stage on a configurable interval and COPY INTOs whatever it finds. dbt
 # run/test is scheduled separately, via dbt Cloud's own job scheduler.
 #
-# BRONZE.GENERATE_TRADE_FILES itself is NOT defined here as a
-# snowflake_procedure_python resource: the installed provider (v1.2.3) has a
-# read-back bug for Python procedure objects that reproduces regardless of
-# HCL config ("could not parse package from Snowflake, expected at least
-# snowpark package, got []"). It's created instead by
+# BRONZE.GENERATE_TRADE_FILES itself is defined in
 # terraform/sql/generate_trade_files_procedure.sql, run once before `apply`
-# — see docs/SETUP_GUIDE.md. Everything else here is Terraform-managed.
+# — see docs/SETUP_GUIDE.md — rather than as a snowflake_procedure_python
+# resource here, so its Python body stays under direct version control in
+# its own file. Everything else here is Terraform-managed.
 
 resource "snowflake_task" "generate_trade_files_task" {
   database  = snowflake_database.trade_analytics.name

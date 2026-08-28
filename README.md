@@ -97,11 +97,10 @@ from an `environment.yml` alongside the main file — every package in it,
 channel; arbitrary `pip` packages aren't installable in the sandboxed SiS
 runtime), and `snowflake_streamlit.dashboard` registers the app itself,
 running queries on `TRADE_ANALYTICS_WH`. View it in Snowsight under
-**Projects → Streamlit**. The file *content* is uploaded via `PUT` outside
-Terraform — the same one deliberate exception as
-`terraform/sql/generate_trade_files_procedure.sql`, since neither
-Terraform resource type can push file contents, only register the object
-that points at them.
+**Projects → Streamlit**. The file *content* is uploaded via `PUT`,
+alongside `terraform/sql/generate_trade_files_procedure.sql`: Terraform
+registers the app object and the stage it lives on, and file content is
+pushed separately, the same pattern used for the stored procedure's code.
 
 The app code itself works two ways with zero duplication:
 `get_active_session()` (in `common.py`) succeeds only when actually running
@@ -221,9 +220,8 @@ needs no manual cleanup.
   `TASK_HISTORY` every 15 minutes and emails on any failure via a
   `snowflake_email_notification_integration`. `BRONZE.GENERATE_TRADE_FILES`
   itself is deployed via `terraform/sql/generate_trade_files_procedure.sql`
-  rather than as a `snowflake_procedure_python` resource — the installed
-  provider version has a read-back bug for that resource type; see the
-  comment at the top of that SQL file.
+  rather than as a `snowflake_procedure_python` resource, so its Python
+  body stays under direct version control, reviewable in one file.
 - **Transformation**: dbt run/test is scheduled hourly, and the Type 2 SCD
   snapshot monthly, through dbt Cloud jobs (project reads this repo
   directly via a read-only deploy key) — not through Snowflake Tasks;
