@@ -1,14 +1,20 @@
 """
 End-to-end trade ETL pipeline.
 
-generate_trades -> load_to_snowflake -> dbt_deps -> dbt_run -> dbt_test
+generate_trades -> load_to_snowflake -> dbt_deps -> dbt_run -> dbt_test -> dbt_snapshot
 
-Each dbt task runs `--select` scoped to keep failures attributable to a
-specific layer (staging vs. intermediate vs. marts), and `dbt_run`/`dbt_test`
-are split so a failing test doesn't get reported as a build failure and
-vice versa. On any task failure, Airflow emails ALERT_EMAIL_TO (SMTP config
-in docker-compose.yml) and the DAG run shows red in the UI for at-a-glance
-health monitoring.
+`dbt_run`/`dbt_test` are split so a failing test doesn't get reported as a
+build failure and vice versa. On any task failure, Airflow emails
+ALERT_EMAIL_TO (SMTP config in docker-compose.yml) and the DAG run shows
+red in the UI for at-a-glance health monitoring.
+
+dbt_snapshot runs every hour alongside everything else, not monthly: this
+is the ONLY trigger for anything in the pipeline now (Snowflake Tasks are
+suspended, both dbt Cloud jobs' schedules are disabled -- see README's
+"Orchestration" section) -- to avoid a real gap in Type 2 SCD capture,
+snapshot runs here instead. Safe to run hourly: its `check` strategy only
+records a new row when a tracked column actually changed, so an hourly
+no-op run is a cheap no-op, not duplicate history.
 """
 
 import os
@@ -79,4 +85,9 @@ with DAG(
         bash_command=f"cd {DBT_PROJECT_DIR} && dbt --no-partial-parse test",
     )
 
-    generate_trades >> load_to_snowflake >> dbt_deps >> dbt_run >> dbt_test
+    dbt_snapshot = BashOperator(
+        task_id="dbt_snapshot",
+        bash_command=f"cd {DBT_PROJECT_DIR} && dbt --no-partial-parse snapshot",
+    )
+
+    generate_trades >> load_to_snowflake >> dbt_deps >> dbt_run >> dbt_test >> dbt_snapshot

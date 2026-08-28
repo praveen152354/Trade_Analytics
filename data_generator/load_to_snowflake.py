@@ -63,6 +63,24 @@ def load_files(file_glob: str) -> int:
         cur.execute(copy_sql)
         result = cur.fetchall()
         print(f"COPY INTO result: {result}")
+
+        # PURGE=TRUE above only removes the STAGED copy -- the local file
+        # was never touched, so an unchanged --file-glob (the default,
+        # output/*.jsonl) re-matches it on every future invocation
+        # forever. That's not just wasted work: PUT's gzip compression
+        # embeds a timestamp, so re-uploading identical content later
+        # produces a different checksum and slips past Snowflake's own
+        # file-level dedup -- confirmed live as the cause of genuine
+        # duplicate BRONZE rows (same message_id, different loaded_at)
+        # that broke int_trades_evaluated's MERGE downstream. Deleting the
+        # local file here, unconditionally once COPY INTO has been
+        # attempted, closes that regardless of whether Snowflake's own
+        # dedup would have caught the re-upload -- output/ is gitignored
+        # scratch, safe to clean up.
+        for path in files:
+            os.remove(path)
+        print(f"Removed {len(files)} local file(s) from {Path(file_glob).parent} after load attempt.")
+
         return loaded
     finally:
         conn.close()

@@ -2,7 +2,14 @@ version: 2
 
 models:
   - name: stg_trades
-    description: Flattened, typed view of every raw trade message drained from the stream.
+    description: >
+      Flattened, typed, deduplicated (by message_id) view of every raw
+      trade message drained from the stream. This is the BRONZE -> SILVER
+      boundary: BRONZE.TRADES_RAW deliberately keeps every row it ever
+      received, duplicates included, for audit; this model is where
+      duplicates stop -- nothing downstream of here should ever need to
+      dedupe by message_id again. The unique test below is what actually
+      enforces that on every dbt test run, not just the model's own SQL.
     columns:
       - name: message_id
         description: Unique id of the inbound message (not the trade).

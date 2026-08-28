@@ -45,6 +45,28 @@ with source as (
     from {{ source('bronze', 'trades_raw_stream') }}
     where metadata$action = 'INSERT'
 
+),
+
+-- Defends against a real bug found live: the local loader re-uploading a
+-- file it had already loaded (see load_to_snowflake.py's cleanup step for
+-- the actual fix) produced genuine duplicate BRONZE rows -- same
+-- message_id and content, different loaded_at, because PUT's gzip
+-- compression embeds a timestamp, so re-uploading identical content later
+-- gets a different checksum and slips past Snowflake's own file-level
+-- dedup. Those duplicates broke int_trades_evaluated's MERGE downstream
+-- (a MERGE source can match a target row at most once). message_id is
+-- meant to be globally unique per inbound message, so any repeat within
+-- one stream-consumption batch is exactly this load artifact, never
+-- legitimate business data -- safe to collapse to one row.
+deduplicated as (
+
+    select *
+    from source
+    qualify row_number() over (
+        partition by raw_payload:message_id::string
+        order by loaded_at asc
+    ) = 1
+
 )
 
 select
@@ -64,4 +86,4 @@ select
     raw_payload:price::float                  as price,
     file_name,
     loaded_at
-from source
+from deduplicated
