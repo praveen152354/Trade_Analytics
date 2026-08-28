@@ -11,7 +11,7 @@ import streamlit as st
 from common import load_rejected_detail, load_report, load_trade_history, render_filters
 
 st.set_page_config(page_title="Trade Analytics — Trade Details", layout="wide")
-st.title("Trade Analytics — Trade Details")
+st.header("Trade Analytics — Trade Details")
 
 report_df = load_report()
 filtered_df = render_filters(report_df)
@@ -52,7 +52,7 @@ else:
                 f"{len(history_df)} recorded versions -- {amendments} amendment"
                 f"{'s' if amendments != 1 else ''} since inception. "
                 f"Currently version {int(current_row['VERSION'])}, "
-                f"${current_row['NOTIONAL']:,.0f} {current_row['CURRENCY']}."
+                f"\\${current_row['NOTIONAL']:,.0f} {current_row['CURRENCY']}."
             )
         st.dataframe(
             history_df[

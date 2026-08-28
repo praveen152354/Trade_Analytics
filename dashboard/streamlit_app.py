@@ -19,7 +19,7 @@ import streamlit as st
 from common import load_rejected_summary, load_report, render_filters
 
 st.set_page_config(page_title="Trade Analytics — Summary", layout="wide")
-st.title("Trade Analytics — Summary")
+st.header("Trade Analytics — Summary")
 
 report_df = load_report()
 rejected_summary_df = load_rejected_summary()
@@ -39,9 +39,12 @@ top_product, top_product_notional = by_product.index[0], by_product.iloc[0]
 top_product_pct = top_product_notional / total_notional * 100 if total_notional else 0
 
 st.markdown(
-    f"**{len(filtered_df):,} trades** in view, worth **${total_notional:,.0f}** notional (USD) — "
+    # Dollar signs escaped (\$) -- Streamlit's markdown treats a pair of
+    # unescaped $ as a LaTeX math span, which otherwise swallows everything
+    # between the two amounts below into garbled math-mode rendering.
+    f"**{len(filtered_df):,} trades** in view, worth **\\${total_notional:,.0f}** notional (USD) — "
     f"**{active_pct:.0f}% active**. **{top_product}** is the largest exposure by notional, "
-    f"at ${top_product_notional:,.0f} ({top_product_pct:.0f}%)."
+    f"at \\${top_product_notional:,.0f} ({top_product_pct:.0f}%)."
 )
 
 # --- KPI row ---------------------------------------------------------------
@@ -61,7 +64,7 @@ row1_left, row1_right = st.columns(2)
 row2_left, row2_right = st.columns(2)
 
 with row1_left:
-    st.subheader("Status")
+    st.markdown("**Status**")
     status_counts = filtered_df["TRADE_STATUS"].value_counts().reset_index()
     status_counts.columns = ["status", "count"]
     fig = px.pie(status_counts, names="status", values="count", hole=0.55, height=CHART_HEIGHT)
@@ -70,14 +73,14 @@ with row1_left:
     st.caption(f"{active_pct:.0f}% active, {100 - active_pct:.0f}% expired.")
 
 with row1_right:
-    st.subheader("Notional by product")
+    st.markdown("**Notional by product**")
     fig = px.bar(by_product.reset_index(), x="PRODUCT_TYPE", y="NOTIONAL_USD", height=CHART_HEIGHT)
     fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), xaxis_title=None, yaxis_title=None)
     st.plotly_chart(fig, use_container_width=True)
-    st.caption(f"{top_product} leads at ${top_product_notional:,.0f} ({top_product_pct:.0f}% of total).")
+    st.caption(f"{top_product} leads at \\${top_product_notional:,.0f} ({top_product_pct:.0f}% of total).")
 
 with row2_left:
-    st.subheader("Notional by currency")
+    st.markdown("**Notional by currency**")
     by_currency = filtered_df.groupby("CURRENCY")["NOTIONAL_USD"].sum().sort_values(ascending=False)
     top_currency, top_currency_notional = by_currency.index[0], by_currency.iloc[0]
     top_currency_pct = top_currency_notional / total_notional * 100 if total_notional else 0
@@ -87,7 +90,7 @@ with row2_left:
     st.caption(f"{top_currency} dominates at {top_currency_pct:.0f}% of the book.")
 
 with row2_right:
-    st.subheader("Rejections by reason")
+    st.markdown("**Rejections by reason**")
     if rejected_summary_df.empty:
         st.caption("No rejected trades recorded.")
     else:
