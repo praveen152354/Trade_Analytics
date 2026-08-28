@@ -40,5 +40,6 @@ Thumbs.db
 # dbt local anonymous-usage-tracking id (machine-specific, not project config)
 dbt/trade_analytics/.user.yml
 
-# Generated deliverable doc (source script is docs/generate_summary_doc.py; regenerate, don't commit the binary)
+# Generated deliverable docs (source is tracked; regenerate, don't commit the binary)
 Trade_Analytics_Summary.docx
+Trade_Analytics_Project_Flow_Explained.pdf

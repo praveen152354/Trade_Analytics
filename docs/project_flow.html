@@ -1,0 +1,282 @@
+<!--
+  Source for Trade_Analytics_Project_Flow_Explained.pdf (not committed — see
+  .gitignore). Regenerate with headless Edge/Chrome, e.g.:
+
+  & "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" `
+    --headless --disable-gpu --no-pdf-header-footer `
+    --print-to-pdf="Trade_Analytics_Project_Flow_Explained.pdf" `
+    --print-to-pdf-no-header "file:///C:/path/to/docs/project_flow.html"
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Trade Analytics — Project Flow Explained</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Calibri, Arial, sans-serif;
+    color: #1f2430;
+    line-height: 1.55;
+    font-size: 11pt;
+    margin: 0;
+  }
+  h1, h2, h3, h4 { font-family: 'Segoe UI Semibold', 'Segoe UI', Calibri, Arial, sans-serif; color: #12213d; }
+  .cover {
+    height: 250mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    page-break-after: always;
+    background: linear-gradient(160deg, #0f2545 0%, #16345f 55%, #1c4a7a 100%);
+    color: white;
+    margin: -16mm -14mm 0 -14mm;
+    padding: 16mm 18mm;
+  }
+  .cover .kicker { font-size: 12pt; letter-spacing: 3px; text-transform: uppercase; color: #8fc6ff; margin-bottom: 14px; }
+  .cover h1 { color: white; font-size: 34pt; margin: 0 0 10px 0; line-height: 1.15; }
+  .cover .sub { font-size: 13pt; color: #cfe3fb; max-width: 480px; margin-bottom: 40px; }
+  .cover .medallion-strip { display: flex; gap: 10px; margin-top: 10px; }
+  .cover .chip { padding: 7px 14px; border-radius: 20px; font-size: 9.5pt; font-weight: 600; }
+  .chip-bronze { background: #cd7f32; color: #2b1400; }
+  .chip-silver { background: #c8ccd4; color: #23262b; }
+  .chip-gold { background: #e6b800; color: #2b2200; }
+  .cover .footer-meta { position: absolute; bottom: 16mm; left: 18mm; font-size: 9.5pt; color: #9db8d8; }
+
+  section { page-break-inside: avoid; }
+  .section-title {
+    display: flex; align-items: center; gap: 10px;
+    border-bottom: 2px solid #12213d;
+    padding-bottom: 6px; margin: 26px 0 12px 0;
+  }
+  .section-title .num {
+    background: #12213d; color: white; width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 11pt; font-weight: 700; flex-shrink: 0;
+  }
+  .section-title h2 { margin: 0; font-size: 15pt; }
+
+  .flow-wrap { page-break-after: always; }
+  .flow-diagram {
+    display: flex; align-items: stretch; gap: 0; margin: 18px 0 8px 0; flex-wrap: nowrap;
+  }
+  .flow-stage {
+    flex: 1; min-width: 0; border-radius: 8px; padding: 10px 8px; text-align: center;
+    border: 1.5px solid #d8dde5; position: relative;
+  }
+  .flow-stage .icon { font-size: 20pt; display: block; margin-bottom: 4px; }
+  .flow-stage .title { font-weight: 700; font-size: 9pt; display: block; }
+  .flow-stage .sub { font-size: 7.3pt; color: #555; display: block; margin-top: 2px; }
+  .flow-arrow { flex: 0 0 22px; display: flex; align-items: center; justify-content: center; font-size: 16pt; color: #8894a3; }
+  .stage-bronze { background: #f6e6d3; border-color: #cd7f32; }
+  .stage-silver { background: #eef0f3; border-color: #9aa2ae; }
+  .stage-gold { background: #fbf1cc; border-color: #d4a900; }
+  .stage-source { background: #e4edf9; border-color: #4a77ad; }
+  .stage-out { background: #e6f4ea; border-color: #3f8f5c; }
+
+  .flow-legend { display: flex; gap: 16px; font-size: 8.5pt; color: #444; margin-top: 6px; flex-wrap: wrap; }
+  .flow-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+  .support-bands { margin-top: 22px; }
+  .band { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; margin-bottom: 8px; font-size: 9pt; }
+  .band .band-label { font-weight: 700; min-width: 110px; }
+  .band-orch { background: #fdeee0; }
+  .band-mon { background: #eaf3ff; }
+  .band-iac { background: #f1eaff; }
+
+  .component {
+    border: 1px solid #e1e5eb; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px;
+    page-break-inside: avoid;
+  }
+  .component .comp-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .component .comp-icon { font-size: 15pt; }
+  .component h3 { margin: 0; font-size: 11.5pt; }
+  .component .layer-tag { font-size: 7.5pt; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin-left: auto; }
+  .tag-bronze { background: #cd7f32; color: #2b1400; }
+  .tag-silver { background: #c8ccd4; color: #23262b; }
+  .tag-gold { background: #e6b800; color: #2b2200; }
+  .tag-orch { background: #f2a154; color: #3a1c00; }
+  .tag-support { background: #9aa5b8; color: white; }
+
+  .component p { margin: 4px 0; font-size: 9.7pt; }
+  .component .analogy {
+    background: #f7f9fb; border-left: 3px solid #4a77ad; padding: 6px 10px; margin-top: 8px;
+    font-size: 9.2pt; font-style: italic; color: #333;
+  }
+  .component .why { margin-top: 6px; font-size: 9.2pt; }
+  .component .why b { color: #12213d; }
+
+  table.glossary { width: 100%; border-collapse: collapse; font-size: 9.3pt; margin-top: 8px; }
+  table.glossary td { border: 1px solid #e1e5eb; padding: 7px 9px; vertical-align: top; }
+  table.glossary td:first-child { font-weight: 700; width: 26%; color: #12213d; white-space: nowrap; }
+
+  .callout {
+    background: #fff8e6; border: 1px solid #e8d38a; border-radius: 6px; padding: 10px 12px;
+    font-size: 9.3pt; margin: 10px 0;
+  }
+  .footer-note { font-size: 8pt; color: #888; text-align: center; margin-top: 28px; }
+  code { background: #f0f2f5; padding: 1px 5px; border-radius: 3px; font-size: 90%; font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="kicker">Data Engineering Case Study</div>
+  <h1>Trade Analytics<br>Project Flow, Explained</h1>
+  <div class="sub">A left-to-right walkthrough of every component in the pipeline — what it is, what it does, and why it's built this way — written so it makes sense even if you weren't in the room when it was built.</div>
+  <div class="medallion-strip">
+    <span class="chip chip-bronze">🥉 BRONZE — raw landing</span>
+    <span class="chip chip-silver">🥈 SILVER — cleaned &amp; validated</span>
+    <span class="chip chip-gold">🥇 GOLD — business-ready</span>
+  </div>
+</div>
+
+<!-- ================= THE BIG PICTURE ================= -->
+<div class="flow-wrap">
+<div class="section-title"><div class="num">1</div><h2>The Big Picture</h2></div>
+<p>Two kinds of data enter this system: <b>trades</b> (generated automatically, every couple of minutes) and <b>daily FX rates</b> (a file someone uploads once a day). Both flow left to right through three "cleanliness" stages — Bronze, Silver, Gold — a pattern called a <b>medallion architecture</b>. Each stage only trusts data that has passed the checks of the stage before it, so by the time data reaches Gold, it's safe for a report, a dashboard, or a finance team to rely on.</p>
+
+<div class="flow-diagram">
+  <div class="flow-stage stage-source"><span class="icon">🏭</span><span class="title">Trade Generator</span><span class="sub">Snowpark procedure, runs every few minutes</span></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-stage stage-source"><span class="icon">📤</span><span class="title">S3 Upload</span><span class="sub">FX rates file, manual, once a day</span></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-stage stage-bronze"><span class="icon">🥉</span><span class="title">BRONZE</span><span class="sub">Raw landing — nothing checked yet</span></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-stage stage-silver"><span class="icon">🥈</span><span class="title">SILVER</span><span class="sub">Cleaned + business rules applied</span></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-stage stage-gold"><span class="icon">🥇</span><span class="title">GOLD</span><span class="sub">Business-ready tables &amp; history</span></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-stage stage-out"><span class="icon">📊</span><span class="title">Reports</span><span class="sub">Dashboard, monthly snapshots</span></div>
+</div>
+<div class="flow-legend">
+  <span><span class="swatch" style="background:#f6e6d3;border:1px solid #cd7f32;"></span>Bronze = unfiltered, as-received</span>
+  <span><span class="swatch" style="background:#eef0f3;border:1px solid #9aa2ae;"></span>Silver = validated, business rules decided</span>
+  <span><span class="swatch" style="background:#fbf1cc;border:1px solid #d4a900;"></span>Gold = final, ready to use</span>
+</div>
+
+<div class="support-bands">
+  <div class="band band-orch"><span class="band-label">⏱ Orchestration</span> Two independent schedulers run this: <b>Snowflake Tasks</b> handle everything left of Silver (generation, uploads polling); <b>dbt Cloud</b> handles Silver → Gold (hourly) and the monthly history snapshot.</div>
+  <div class="band band-mon"><span class="band-label">🔔 Monitoring</span> A Snowflake <b>Alert</b> checks every 15 minutes whether any task failed and emails if so; dbt Cloud separately emails on a failed run.</div>
+  <div class="band band-iac"><span class="band-label">🧱 Built by</span> Every piece above — warehouses, schemas, tables, tasks, the S3 connection — is defined as code in <b>Terraform</b>, not clicked together by hand, so the whole thing can be rebuilt from scratch on demand.</div>
+</div>
+</div>
+
+<!-- ================= COMPONENT WALKTHROUGH ================= -->
+<div class="section-title"><div class="num">2</div><h2>Component-by-Component Walkthrough</h2></div>
+<p style="font-size:9.5pt;color:#555;">Read top to bottom — this follows the same left-to-right order as the diagram above.</p>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🏭</span><h3>Trade Generator (Snowpark Procedure)</h3><span class="layer-tag tag-bronze">entry point</span></div>
+  <p>A small Python program that lives <i>inside</i> Snowflake (not on anyone's laptop). Every couple of minutes it invents a batch of realistic-looking trades — new trades, amendments to old ones, the occasional duplicate or already-expired trade thrown in on purpose — and writes them as a file directly into Snowflake's own storage.</p>
+  <div class="why"><b>Why inside Snowflake, not an external script?</b> No separate server to keep running, no laptop that has to stay on, no extra AWS bill for compute — the same warehouse that does everything else runs this too.</div>
+  <div class="analogy">Think of it as a practice dummy at a shooting range: it fires realistic shots (trades) on a schedule so the rest of the system has something real to process, without needing an actual trading desk hooked up.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">📤</span><h3>S3 Upload (Daily FX Rates)</h3><span class="layer-tag tag-bronze">entry point</span></div>
+  <p>A second, independent data source: once a day, someone drops a CSV file of currency exchange rates (e.g. "1 EUR = 1.081 USD") into an Amazon S3 bucket. Snowflake has been given a narrow, read-only key to look into that one folder — nothing more.</p>
+  <div class="why"><b>Why S3 instead of another Snowflake stage?</b> This mirrors how data really arrives in most companies — from a different system entirely, owned by a different team, sitting in cloud storage that isn't Snowflake's. It's a genuinely separate, realistic integration rather than a second copy of the same trick.</div>
+  <div class="analogy">Like a supplier dropping off a box at your loading dock once a day — you don't control when exactly they show up, so you check the dock on a schedule rather than waiting by the door.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🥉</span><h3>BRONZE — Raw Landing</h3><span class="layer-tag tag-bronze">bronze</span></div>
+  <p>Two scheduled jobs (Snowflake "Tasks") move data from where it lands into permanent tables: one checks the internal storage for new trade files every 2 minutes and loads them; another checks the S3 folder once a day for new rate files. Nothing is validated here — Bronze's only job is "get it in, keep a permanent copy, don't lose anything."</p>
+  <div class="why"><b>Why not validate immediately?</b> Keeping raw data as-received, untouched, means you can always re-run everything downstream from scratch if a business rule turns out to be wrong later — you haven't thrown anything away.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🌊</span><h3>The Stream (Change Tracking)</h3><span class="layer-tag tag-bronze">bronze</span></div>
+  <p>A Snowflake "Stream" sits on the raw trades table and remembers exactly which rows are new since the last time something looked. The next stage reads from the stream, not the raw table directly, so it only ever processes new arrivals — never the same trade twice, never a full re-scan of history.</p>
+  <div class="analogy">Like a "new mail" tray instead of the entire filing cabinet — you only look at what's landed since you last checked.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🥈</span><h3>SILVER — Cleaning &amp; Business Rules</h3><span class="layer-tag tag-silver">silver</span></div>
+  <p>This is where the real decision-making happens, in two steps:</p>
+  <p><b>Step 1 — Flatten:</b> raw trade messages arrive as one blob of JSON; this step breaks them out into normal columns (trade ID, version, maturity date, notional amount, currency, and so on).</p>
+  <p><b>Step 2 — Decide:</b> every trade message is checked against the business rules and gets exactly one verdict: <i>accepted</i> or <i>rejected</i>, with a reason recorded either way:</p>
+  <table class="glossary">
+    <tr><td>Older version arrives</td><td>Rejected — a newer version of this trade is already on file, so this one is stale.</td></tr>
+    <tr><td>Same version arrives again</td><td>Accepted — treated as a correction/replay, replaces what's on file.</td></tr>
+    <tr><td>Maturity date already passed</td><td>Rejected — this trade would be born already expired, which isn't valid.</td></tr>
+    <tr><td>Two versions in one batch</td><td>The newer one is accepted; the older one is logged as rejected rather than silently thrown away.</td></tr>
+  </table>
+  <div class="why"><b>Why one single place for all these decisions?</b> If "accept or reject" logic were scattered across several files, they could quietly drift out of sync with each other over time. Having exactly one decision point means there is exactly one place to look, trust, and test.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🥇</span><h3>GOLD — Business-Ready Tables</h3><span class="layer-tag tag-gold">gold</span></div>
+  <p>Three tables, each with one clear job:</p>
+  <table class="glossary">
+    <tr><td><code>valid_trades</code></td><td>The current, accepted state of every trade — one row per trade, always the latest version.</td></tr>
+    <tr><td><code>rejected_trades</code></td><td>A permanent audit log of every trade that was turned away and why — needed for compliance, never edited or deleted.</td></tr>
+    <tr><td><code>trade_status</code></td><td>A friendlier view for reporting: adds "Active" or "Expired" (worked out fresh every time it's queried, from today's date vs. the maturity date — not a stored flag that could go stale) and converts each trade's amount into US dollars.</td></tr>
+  </table>
+  <div class="why"><b>Why compute "Expired" on the fly instead of storing it?</b> A trade's expiry status changes automatically as time passes — there's no button anyone presses. Computing it at read-time means it's always correct, with no separate job needed to "remember" to update it.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">💱</span><h3>The Currency-Conversion Macro</h3><span class="layer-tag tag-gold">gold</span></div>
+  <p>A small reusable piece of code that turns "this trade is 5 million EUR" into "this trade is about 5.4 million USD," using a table of exchange rates. Instead of writing that conversion logic by hand everywhere it's needed, it's written once and reused — change a rate in one place, and every report using it updates automatically.</p>
+  <div class="analogy">Like a currency converter widget you plug into any spreadsheet, instead of re-typing the conversion formula in every single cell.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🕰️</span><h3>Monthly History Snapshot (Type 2 SCD)</h3><span class="layer-tag tag-gold">gold</span></div>
+  <p><code>valid_trades</code> only ever shows "right now" — it doesn't remember what a trade looked like last month. Once a month, a separate job takes a permanent copy of the current state and files it away with a timestamp, building up a history: "as of the end of January, this trade looked like X; as of the end of February, it looked like Y."</p>
+  <div class="why"><b>Why does this matter?</b> Finance and compliance teams often need to answer "what did our book of trades look like at the end of last month," not just "what does it look like today." Without this, that question is unanswerable once the data has moved on.</div>
+  <div class="analogy">Like a photograph taken on the last day of every month, kept in an album — you can always flip back and see exactly how things looked on that date, even though today looks different.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">⏱️</span><h3>Orchestration — Who Presses "Go"</h3><span class="layer-tag tag-orch">supporting</span></div>
+  <p>Nothing in this pipeline runs because a person clicks a button each time. Two independent schedulers own different parts:</p>
+  <p><b>Snowflake Tasks</b> — tiny, built-in Snowflake schedules — handle everything before Silver: generating trades, polling S3, loading raw data.</p>
+  <p><b>dbt Cloud</b> — a separate scheduling service — handles Silver and Gold: it runs the cleaning/rules/marts logic every hour, and the monthly history snapshot once a month.</p>
+  <div class="why"><b>Why two schedulers instead of one?</b> Each is good at a different kind of job — Snowflake Tasks are the natural fit for simple, native Snowflake actions; dbt Cloud is purpose-built for running and testing dbt's transformation logic, with its own retry/log/notification handling included for free.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🔔</span><h3>Monitoring &amp; Alerting</h3><span class="layer-tag tag-support">supporting</span></div>
+  <p>Every scheduled job automatically retries itself twice if it fails, and stops trying (rather than failing forever in a loop) after three failed attempts in a row. On top of that, a Snowflake "Alert" checks every 15 minutes whether anything failed recently and sends an email if so — and dbt Cloud does the same independently for its own jobs. There's also a ready-made library of copy-paste queries for digging into "what happened and why" when something does go wrong.</p>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🧱</span><h3>Infrastructure as Code (Terraform)</h3><span class="layer-tag tag-support">supporting</span></div>
+  <p>Every piece of Snowflake and AWS infrastructure in this system — warehouses, schemas, tables, tasks, the S3 bucket, the permissions connecting them — is written down as code rather than clicked together by hand in a web console. Running one command rebuilds the entire environment from nothing.</p>
+  <div class="why"><b>Why does this matter?</b> If this environment were lost, recreating it by memory/clicking would be slow and error-prone. With it written as code, rebuilding is fast, repeatable, and exactly reproducible — and every change to the infrastructure has a paper trail (it's tracked in version control, just like the code itself).</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🔁</span><h3>CI/CD (Automatic Checks on Every Change)</h3><span class="layer-tag tag-support">supporting</span></div>
+  <p>Whenever a change is proposed to the code, automated checks run before it's allowed to merge: the data transformation logic is tested, and the infrastructure code is validated. Deploying new infrastructure changes to the live environment is a deliberate, manual trigger — not something that happens automatically just because code changed.</p>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">📊</span><h3>Dashboard (Optional)</h3><span class="layer-tag tag-support">supporting</span></div>
+  <p>A simple web page that queries the Gold tables directly and shows, at a glance, how many trades are active vs. expired, and why trades have been rejected recently. It's optional and separate from the pipeline itself — it's a consumer of Gold data, not a part of building it.</p>
+</div>
+
+<!-- ================= GLOSSARY ================= -->
+<div class="section-title"><div class="num">3</div><h2>Plain-English Glossary</h2></div>
+<table class="glossary">
+  <tr><td>Medallion architecture</td><td>Organizing data into progressively cleaner stages — Bronze (raw), Silver (validated), Gold (business-ready) — instead of one big undifferentiated pile.</td></tr>
+  <tr><td>Stream (CDC)</td><td>Snowflake's built-in way of tracking "what's new since I last looked," so downstream jobs only process new data, never everything from scratch.</td></tr>
+  <tr><td>Task</td><td>A built-in Snowflake schedule that runs a piece of SQL (or calls a procedure) automatically, on a timer — Snowflake's version of a cron job.</td></tr>
+  <tr><td>Macro</td><td>A reusable, parameterized snippet of code (in dbt) — write the logic once, use it in many places, change it in one place.</td></tr>
+  <tr><td>Type 2 SCD (Slowly Changing Dimension)</td><td>A way of keeping full history instead of only "right now" — every change gets a new row with a start/end date, rather than overwriting the old value.</td></tr>
+  <tr><td>Storage Integration</td><td>Snowflake's secure way of connecting to a cloud storage bucket (like S3) using a trusted role instead of a stored password/key.</td></tr>
+  <tr><td>IaC (Infrastructure as Code)</td><td>Describing infrastructure (servers, tables, permissions) in code files instead of clicking through a web console, so it's repeatable and version-controlled.</td></tr>
+  <tr><td>CI/CD</td><td>Automated checks and deployments triggered by code changes — "Continuous Integration / Continuous Delivery."</td></tr>
+</table>
+
+<div class="callout">💡 <b>The one-sentence version:</b> Trades and daily FX rates flow in from two different sources, get progressively cleaned and validated through Bronze → Silver → Gold, are watched over by two independent schedulers with automatic retries and email alerts, and the entire environment that makes this possible is written as code so it can be rebuilt on demand.</div>
+
+<div class="footer-note">Trade Analytics — Data Engineering Case Study · Generated as a project walkthrough for onboarding/explanation purposes</div>
+
+</body>
+</html>
