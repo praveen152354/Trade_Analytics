@@ -199,7 +199,7 @@ docker compose up --build
 
 Open http://localhost:8080 (`AIRFLOW_ADMIN_USER` / `AIRFLOW_ADMIN_PASSWORD`
 from `.env`, default `admin`/`admin`), unpause the `trade_pipeline` DAG. It
-runs every 30 minutes and can be triggered manually from the UI.
+runs hourly and can be triggered manually from the UI.
 
 ## 7. Dashboard
 

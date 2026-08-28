@@ -34,7 +34,7 @@ with DAG(
     dag_id="trade_pipeline",
     description="Simulate trades, load to Snowflake, validate with dbt.",
     default_args=default_args,
-    schedule_interval="*/30 * * * *",
+    schedule_interval="@hourly",
     start_date=datetime(2026, 1, 1),
     catchup=False,
     max_active_runs=1,
@@ -63,14 +63,20 @@ with DAG(
         bash_command=f"cd {DBT_PROJECT_DIR} && dbt deps",
     )
 
+    # --no-partial-parse: dbt/trade_analytics/target/ (with its partial-parse
+    # cache) is bind-mounted from the host, shared with local `dbt run`s on
+    # the same project -- a cache built by one environment can go stale for
+    # the other and crash with a KeyError during manifest loading. Costs a
+    # few seconds of full reparse per run in exchange for not depending on
+    # cache state from whichever environment touched target/ last.
     dbt_run = BashOperator(
         task_id="dbt_run",
-        bash_command=f"cd {DBT_PROJECT_DIR} && dbt run",
+        bash_command=f"cd {DBT_PROJECT_DIR} && dbt --no-partial-parse run",
     )
 
     dbt_test = BashOperator(
         task_id="dbt_test",
-        bash_command=f"cd {DBT_PROJECT_DIR} && dbt test",
+        bash_command=f"cd {DBT_PROJECT_DIR} && dbt --no-partial-parse test",
     )
 
     generate_trades >> load_to_snowflake >> dbt_deps >> dbt_run >> dbt_test
