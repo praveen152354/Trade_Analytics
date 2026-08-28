@@ -55,6 +55,7 @@ jobs:
   # you want it fully automatic.
   apply:
     name: terraform apply (manual)
+    needs: validate # must not run concurrently with plan -- both hit the same S3 state lock (verified live: this exact race produced "Error acquiring the state lock" / 412 PreconditionFailed)
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: production
