@@ -18,6 +18,9 @@ snowflake_sql/          ready-to-run SQL: debugging, time travel, cost/perf
 dbt/trade_analytics/    models/silver -> models/gold -> snapshots (Type 2 SCD)
 dashboard/              Streamlit trade-status dashboard -- runs natively in
                         Snowflake (Streamlit in Snowflake), see below
+observability/          Live pipeline-status checks + task resume/suspend
+                        controls, imported by the dashboard's Pipeline
+                        Health page -- see below
 .github/workflows/      CI/CD for dbt and Terraform
 docs/                   architecture diagram, setup guide, validation logic,
                         scalability/monitoring write-up
@@ -65,7 +68,8 @@ type, currency, status, maturity date range) applied against it.
 
 ### The dashboard — Streamlit in Snowflake, multi-page
 
-Two pages, sharing filter state and query logic via `dashboard/common.py`:
+Three pages. The first two share filter state and query logic via
+`dashboard/common.py`; the third is a separate, operational concern:
 
 - **Summary** (`dashboard/Summary.py`, the app's entry point — named so
   Streamlit's sidebar nav, which derives a page's label from its filename
@@ -82,13 +86,31 @@ Two pages, sharing filter state and query logic via `dashboard/common.py`:
   `valid_trades_snapshot` (the Type 2 SCD history) for whichever trade is
   selected and reports how many amendments it's had, and the rejected-
   trades audit log with its own reason filter.
+- **Pipeline Health** (`dashboard/pages/2_Pipeline_Health.py`, logic in
+  `observability/pipeline_status.py`) — the "one place to see the whole
+  pipeline end-to-end" view raised when the Airflow alternative was
+  removed (see "Orchestration" below): a left-to-right flow diagram
+  (Generate → Ingest Trades / Ingest FX → Stream → Transform → Gold) with
+  each stage colored live by its actual Snowflake state, per-task
+  `TASK_HISTORY` (last run status, error if any, next scheduled time),
+  the failure alert's state, whether the CDC stream has an unconsumed
+  backlog, and **resume/suspend buttons for every ingestion Task and the
+  alert, right from the page** (a confirmation step before resuming, since
+  that starts consuming warehouse credits on a schedule). The transform
+  layer's freshness is shown too, but deliberately as a proxy (newest row
+  in each GOLD/SILVER object) rather than a live dbt Cloud job-status
+  call — that would need Snowflake External Access + a stored dbt Cloud
+  API token, a separate decision with its own security tradeoffs, not
+  bundled in here.
 
 It runs natively inside Snowflake (a **Streamlit in Snowflake / SiS** app,
 `terraform/streamlit.tf`) rather than as a script on someone's laptop — no
 `.env`, no local Python process that has to keep running. It's a Snowflake
 object like any other Terraform-managed resource:
 `snowflake_stage.dashboard_stage` (`GOLD.DASHBOARD_STAGE`) holds the app
-files (`Summary.py`, `common.py`, `pages/1_Trade_Details.py`) plus
+files (`Summary.py`, `common.py`, `pages/1_Trade_Details.py`,
+`pages/2_Pipeline_Health.py`, and `pipeline_status.py` from
+`observability/`, uploaded flat alongside the rest) plus
 `dashboard/environment.yml` (Streamlit in Snowflake reads its package list
 from an `environment.yml` alongside the main file — every package in it,
 `streamlit`/`pandas`/`plotly`, has to exist in Snowflake's Anaconda
