@@ -15,14 +15,32 @@
   if you want the Airflow *alternative* orchestrator; not needed for the
   primary Snowflake-native + dbt Cloud path
 
-## 1. Deploy `BRONZE.GENERATE_TRADE_FILES`, then provision everything else with Terraform
+## 1. Bootstrap remote state, deploy `BRONZE.GENERATE_TRADE_FILES`, then provision everything else with Terraform
 
-This one object is deployed via plain SQL rather than Terraform — see the
-comment at the top of `terraform/sql/generate_trade_files_procedure.sql`
-for why (a provider read-back bug for Python procedure objects).
+**State backend (once per AWS account):** this project uses an S3 backend
+(`terraform/backend.tf`) so local applies and CI share the same state — a
+plain local state file would leave CI's `terraform apply` job trying to
+recreate everything from scratch on every run. The bucket/lock file can't
+be created by Terraform itself (nothing to point the backend at yet), so
+run this once first:
 
 ```powershell
 cd terraform
+pip install -q boto3 python-dotenv
+python bootstrap_state_backend.py
+```
+
+If you're standing this up fresh (not reusing this project's exact bucket
+names), edit the bucket name in both `terraform/backend.tf` and
+`terraform/bootstrap_state_backend.py` to something globally unique first
+— they have to match each other exactly.
+
+`BRONZE.GENERATE_TRADE_FILES` is deployed via plain SQL rather than
+Terraform — see the comment at the top of
+`terraform/sql/generate_trade_files_procedure.sql` for why (a provider
+read-back bug for Python procedure objects).
+
+```powershell
 cp terraform.tfvars.example terraform.tfvars
 # fill in grantee_user = your Snowflake username, alert_email = an email
 # address that's actually verified on your Snowflake user (see step 2)
@@ -31,6 +49,8 @@ $env:SNOWFLAKE_ORGANIZATION_NAME = "your_org"      # from your Snowsight URL
 $env:SNOWFLAKE_ACCOUNT_NAME      = "your_account"  # ditto
 $env:SNOWFLAKE_USER              = "your_username"
 $env:SNOWFLAKE_PASSWORD          = "your_password"
+$env:AWS_ACCESS_KEY_ID           = "your_aws_key"    # for the S3 FX-rates integration (terraform/aws.tf, s3_integration.tf)
+$env:AWS_SECRET_ACCESS_KEY       = "your_aws_secret"
 
 terraform init
 terraform plan
@@ -197,9 +217,14 @@ GitHub Actions workflows are in `.github/workflows/`:
   `BRONZE.GENERATE_TRADE_FILES` from the SQL script before running Terraform.
 
 Add these repository secrets for the workflows to run:
-`SNOWFLAKE_ORGANIZATION_NAME`, `SNOWFLAKE_ACCOUNT_NAME`, `SNOWFLAKE_USER`,
-`SNOWFLAKE_PASSWORD`, `SNOWFLAKE_TRANSFORMER_ROLE`, `SNOWFLAKE_DATABASE`,
-`SNOWFLAKE_WAREHOUSE`, `SNOWFLAKE_TRANSFORM_SCHEMA`, `ALERT_EMAIL`.
+`SNOWFLAKE_ACCOUNT`, `SNOWFLAKE_ORGANIZATION_NAME`, `SNOWFLAKE_ACCOUNT_NAME`,
+`SNOWFLAKE_USER`, `SNOWFLAKE_PASSWORD`, `SNOWFLAKE_TRANSFORMER_ROLE`,
+`SNOWFLAKE_DATABASE`, `SNOWFLAKE_WAREHOUSE`, `SNOWFLAKE_TRANSFORM_SCHEMA`,
+`ALERT_EMAIL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (the last two
+are also needed for `terraform plan`/`apply` to authenticate to the S3
+FX-rates bucket/role — see `terraform/aws.tf`). CI's `terraform` jobs read
+state from the shared S3 backend set up in step 1 above, so `plan`/`apply`
+in CI see the same reality as local runs.
 
 ## Teardown
 
