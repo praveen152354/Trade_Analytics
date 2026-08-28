@@ -33,3 +33,23 @@ sources:
           inside a dbt incremental model's merge/insert statement consumes
           it and advances its offset — this is the "Snowflake feature" used
           to consume newly-arrived trades (see models/silver/stg_trades.sql).
+
+      - name: fx_rates_raw
+        description: >
+          Daily FX rates loaded from S3 (manually-uploaded CSVs at
+          s3://<bucket>/fx_rates/) via an external stage + INGEST_FX_RATES_TASK,
+          once a day. Not yet consumed by any silver/gold model — see the
+          note in docs/VALIDATION_LOGIC.md about wiring this into
+          convert_to_usd() as a future replacement for the static
+          fx_rates_to_usd var.
+        columns:
+          - name: as_of_date
+            description: The date the rate applies to, per the source file.
+          - name: currency
+            description: ISO currency code.
+          - name: rate_to_usd
+            description: Conversion rate to USD as of as_of_date.
+          - name: file_name
+            description: Source file the row was loaded from.
+          - name: loaded_at
+            description: Timestamp the row was copied into Snowflake.

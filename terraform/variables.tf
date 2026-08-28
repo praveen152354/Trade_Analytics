@@ -70,3 +70,23 @@ variable "alert_email" {
   type        = string
   default     = ""
 }
+
+## S3 -> Snowflake FX rates ingestion ###########################################
+
+variable "aws_region" {
+  description = "AWS region for the FX rates S3 bucket."
+  type        = string
+  default     = "eu-north-1"
+}
+
+variable "fx_rates_bucket_base_name" {
+  description = "Base name for the FX rates S3 bucket; a random suffix is appended for global uniqueness."
+  type        = string
+  default     = "trade-analytics-fx-rates"
+}
+
+variable "fx_rates_ingestion_cron" {
+  description = "Cron schedule (Snowflake TASK syntax, includes timezone) for polling S3 and loading new FX rate files. Default: once daily at 06:00 UTC."
+  type        = string
+  default     = "0 6 * * * UTC"
+}

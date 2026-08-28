@@ -17,5 +17,6 @@ provider "snowflake" {
     "snowflake_email_notification_integration_resource",
     "snowflake_procedure_python_resource",
     "snowflake_alert_resource",
+    "snowflake_storage_integration_resource",
   ]
 }

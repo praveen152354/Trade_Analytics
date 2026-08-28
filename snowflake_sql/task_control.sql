@@ -7,8 +7,7 @@
 --
 -- Run as ACCOUNTADMIN (or a role with OPERATE on the tasks/alert — the
 -- TRADE_ANALYTICS_LOADER/TRANSFORMER roles aren't granted that by default).
--- These are also exactly what `terraform apply` will set STARTED = true for
--- both tasks back to on the next run — see the note at the bottom.
+-- See the note at the bottom on how this interacts with `terraform apply`.
 -- =============================================================================
 
 
@@ -18,8 +17,9 @@
 
 alter task trade_analytics.bronze.ingest_trades_task suspend;
 alter task trade_analytics.bronze.generate_trade_files_task suspend;
+alter task trade_analytics.bronze.ingest_fx_rates_task suspend;
 
--- Optional: the failure alert has nothing to alert on once both tasks are
+-- Optional: the failure alert has nothing to alert on once all tasks are
 -- suspended (they can't fail if they're not running), but it still fires
 -- its own check every 15 min for as long as it's enabled. Suspend it too
 -- if you want zero scheduled activity at all:
@@ -32,6 +32,7 @@ alter alert trade_analytics.bronze.task_failure_alert suspend;
 
 alter task trade_analytics.bronze.generate_trade_files_task resume;
 alter task trade_analytics.bronze.ingest_trades_task resume;
+alter task trade_analytics.bronze.ingest_fx_rates_task resume;
 alter alert trade_analytics.bronze.task_failure_alert resume;
 
 
@@ -56,6 +57,9 @@ select "name", "state" from table(result_scan(last_query_id()));
 -- alter task trade_analytics.bronze.ingest_trades_task suspend;
 -- alter task trade_analytics.bronze.ingest_trades_task resume;
 
+-- alter task trade_analytics.bronze.ingest_fx_rates_task suspend;
+-- alter task trade_analytics.bronze.ingest_fx_rates_task resume;
+
 -- alter alert trade_analytics.bronze.task_failure_alert suspend;
 -- alter alert trade_analytics.bronze.task_failure_alert resume;
 
@@ -63,13 +67,14 @@ select "name", "state" from table(result_scan(last_query_id()));
 -- =============================================================================
 -- NOTE on Terraform
 -- =============================================================================
--- terraform/orchestration.tf declares both tasks with `started = true`. If
--- you stop them here via SQL and later run `terraform apply` for any
--- unrelated change, Terraform will see the drift (started: true in config
--- vs. suspended in reality) and resume both tasks as part of that apply —
--- even if you didn't intend to restart the pipeline. If you want the
--- suspended state to survive a stray `terraform apply`, change
--- `started = true` to `started = false` for both snowflake_task resources
--- in terraform/orchestration.tf and re-apply, then flip it back to `true`
--- (or just run the RESUME statements above) when you actually want it
--- running again.
+-- terraform/orchestration.tf declares each task's `started` value explicitly:
+-- GENERATE_TRADE_FILES_TASK and INGEST_TRADES_TASK are currently
+-- `started = false` (intentionally suspended for cost, matching reality as
+-- of the last apply); INGEST_FX_RATES_TASK is `started = true` (new, once-
+-- daily, low cost). If you suspend/resume something here via SQL and it
+-- doesn't match the `started` value in the .tf file, the next
+-- `terraform apply` — even for an unrelated change — will silently flip it
+-- back to match the config. Keep the two in sync: update `started` in
+-- terraform/orchestration.tf (and re-apply) for anything you want to
+-- survive a future apply; use the SQL above for a quick, temporary
+-- start/stop you'll manage by hand.

@@ -18,7 +18,7 @@ resource "snowflake_task" "generate_trade_files_task" {
   schema    = "BRONZE"
   name      = "GENERATE_TRADE_FILES_TASK"
   warehouse = snowflake_warehouse.trade_analytics_wh.name
-  started   = true
+  started   = false # intentionally suspended for now (cost) — flip to true + apply, or see snowflake_sql/task_control.sql, to resume
   comment   = "Writes a new mock trade batch file to BRONZE.TRADES_STAGE on a schedule."
 
   schedule {
@@ -43,7 +43,7 @@ resource "snowflake_task" "ingest_trades_task" {
   schema    = "BRONZE"
   name      = "INGEST_TRADES_TASK"
   warehouse = snowflake_warehouse.trade_analytics_wh.name
-  started   = true
+  started   = false # intentionally suspended for now (cost) — flip to true + apply, or see snowflake_sql/task_control.sql, to resume
   comment   = "Polls BRONZE.TRADES_STAGE and COPY INTOs any new files. Runs on its own cadence, independent of generation."
 
   schedule {
@@ -87,7 +87,7 @@ resource "snowflake_alert" "task_failure_alert" {
   name      = "TASK_FAILURE_ALERT"
   warehouse = snowflake_warehouse.trade_analytics_wh.name
   enabled   = true
-  comment   = "Emails alert_email if either pipeline task failed in the last 15 minutes."
+  comment   = "Emails alert_email if any pipeline task failed in the last 15 minutes."
 
   alert_schedule {
     interval = 15
@@ -99,7 +99,7 @@ resource "snowflake_alert" "task_failure_alert" {
         scheduled_time_range_start => dateadd('minute', -15, current_timestamp())
     ))
     where state = 'FAILED'
-      and name in ('GENERATE_TRADE_FILES_TASK', 'INGEST_TRADES_TASK')
+      and name in ('GENERATE_TRADE_FILES_TASK', 'INGEST_TRADES_TASK', 'INGEST_FX_RATES_TASK')
   SQL
 
   action = <<-SQL
@@ -107,9 +107,9 @@ resource "snowflake_alert" "task_failure_alert" {
         '${snowflake_email_notification_integration.trade_pipeline_alert[0].name}',
         '${var.alert_email}',
         'Trade Analytics pipeline task failure',
-        'One or more Snowflake tasks (GENERATE_TRADE_FILES_TASK / INGEST_TRADES_TASK) failed in the last 15 minutes. Check TASK_HISTORY for details.'
+        'One or more Snowflake tasks (GENERATE_TRADE_FILES_TASK / INGEST_TRADES_TASK / INGEST_FX_RATES_TASK) failed in the last 15 minutes. Check TASK_HISTORY for details.'
     )
   SQL
 
-  depends_on = [snowflake_task.generate_trade_files_task, snowflake_task.ingest_trades_task]
+  depends_on = [snowflake_task.generate_trade_files_task, snowflake_task.ingest_trades_task, snowflake_task.ingest_fx_rates_task]
 }
