@@ -16,7 +16,7 @@ Runs two ways with the same code -- see common.get_session():
 import plotly.express as px
 import streamlit as st
 
-from common import load_rejected_summary, load_report, render_filters
+from common import format_usd_compact, load_rejected_summary, load_report, render_filters
 
 st.set_page_config(page_title="Trade Analytics — Summary", layout="wide")
 st.header("Trade Analytics — Summary")
@@ -42,9 +42,9 @@ st.markdown(
     # Dollar signs escaped (\$) -- Streamlit's markdown treats a pair of
     # unescaped $ as a LaTeX math span, which otherwise swallows everything
     # between the two amounts below into garbled math-mode rendering.
-    f"**{len(filtered_df):,} trades** in view, worth **\\${total_notional:,.0f}** notional (USD) — "
+    f"**{len(filtered_df):,} trades** in view, worth **\\{format_usd_compact(total_notional)}** notional (USD) — "
     f"**{active_pct:.0f}% active**. **{top_product}** is the largest exposure by notional, "
-    f"at \\${top_product_notional:,.0f} ({top_product_pct:.0f}%)."
+    f"at \\{format_usd_compact(top_product_notional)} ({top_product_pct:.0f}%)."
 )
 
 # --- KPI row ---------------------------------------------------------------
@@ -53,7 +53,7 @@ c1.metric("Trades (filtered)", f"{len(filtered_df):,}")
 c2.metric("Active", f"{active_count:,}")
 c3.metric("Expired", f"{len(filtered_df) - active_count:,}")
 c4.metric("Rejected (all-time)", f"{int(rejected_summary_df['REJECT_COUNT'].sum()):,}")
-c5.metric("Notional (USD)", f"${total_notional:,.0f}")
+c5.metric("Notional (USD)", format_usd_compact(total_notional))
 
 st.divider()
 
@@ -77,7 +77,7 @@ with row1_right:
     fig = px.bar(by_product.reset_index(), x="PRODUCT_TYPE", y="NOTIONAL_USD", height=CHART_HEIGHT)
     fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), xaxis_title=None, yaxis_title=None)
     st.plotly_chart(fig, use_container_width=True)
-    st.caption(f"{top_product} leads at \\${top_product_notional:,.0f} ({top_product_pct:.0f}% of total).")
+    st.caption(f"{top_product} leads at \\{format_usd_compact(top_product_notional)} ({top_product_pct:.0f}% of total).")
 
 with row2_left:
     st.markdown("**Notional by currency**")

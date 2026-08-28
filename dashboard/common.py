@@ -12,6 +12,18 @@ import pandas as pd
 import streamlit as st
 
 
+def format_usd_compact(value: float) -> str:
+    """$44,755,314,601 -> $44.76B -- KPI cards and inline captions have too
+    little width for full-precision notional; the exact figure is still one
+    click away in the Trade Details table."""
+    sign = "-" if value < 0 else ""
+    abs_value = abs(value)
+    for threshold, suffix in ((1e12, "T"), (1e9, "B"), (1e6, "M"), (1e3, "K")):
+        if abs_value >= threshold:
+            return f"{sign}${abs_value / threshold:,.2f}{suffix}"
+    return f"{sign}${abs_value:,.0f}"
+
+
 @st.cache_resource
 def get_session():
     try:
