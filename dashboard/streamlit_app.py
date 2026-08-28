@@ -1,155 +1,102 @@
 """
-Optional visualization layer: a filterable trade report plus a pipeline
-overview (active/expired/rejected), read straight from the GOLD marts.
+Trade Analytics dashboard -- Summary page (entry point).
 
-Runs two ways with the same code:
-  1. Natively inside Snowflake (Streamlit in Snowflake / SiS) -- deployed by
-     terraform/streamlit.tf, no local machine or credentials involved at
-     all. This is the primary, "live" way to view it.
-  2. Locally, for development: `streamlit run dashboard/streamlit_app.py`
-     (needs dashboard/requirements.txt and a populated .env).
+Multi-page app: this file is "Summary" (high-level, small charts, one-line
+dynamic explanations); pages/1_Trade_Details.py is "Trade Details"
+(full table, per-trade Type 2 SCD history, rejected-trades audit). Shared
+session/data/filter logic lives in common.py so both pages stay in sync.
 
-get_active_session() only succeeds when actually running inside Snowflake;
-locally it raises, and the except branch builds an equivalent Snowpark
-session from .env instead. Everything after that point is identical code
-either way -- session.sql(...).to_pandas().
+Runs two ways with the same code -- see common.get_session():
+  1. Natively inside Snowflake (Streamlit in Snowflake / SiS), deployed by
+     terraform/streamlit.tf. The primary, "live" way to view it.
+  2. Locally: `streamlit run dashboard/streamlit_app.py` (needs
+     dashboard/requirements.txt and a populated .env).
 """
 
-import os
-
-import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-st.set_page_config(page_title="Trade Analytics", layout="wide")
+from common import load_rejected_summary, load_report, render_filters
 
+st.set_page_config(page_title="Trade Analytics — Summary", layout="wide")
+st.title("Trade Analytics — Summary")
 
-@st.cache_resource
-def get_session():
-    try:
-        from snowflake.snowpark.context import get_active_session
+report_df = load_report()
+rejected_summary_df = load_rejected_summary()
 
-        return get_active_session()
-    except Exception:
-        from dotenv import load_dotenv
-        from snowflake.snowpark import Session
+filtered_df = render_filters(report_df)
 
-        load_dotenv()
-        return Session.builder.configs(
-            {
-                "account": os.environ["SNOWFLAKE_ACCOUNT"],
-                "user": os.environ["SNOWFLAKE_USER"],
-                "password": os.environ.get("SNOWFLAKE_PASSWORD"),
-                "private_key_path": os.environ.get("SNOWFLAKE_PRIVATE_KEY_PATH") or None,
-                "role": os.environ.get("SNOWFLAKE_TRANSFORMER_ROLE", "TRADE_ANALYTICS_TRANSFORMER"),
-                "warehouse": os.environ.get("SNOWFLAKE_WAREHOUSE", "TRADE_ANALYTICS_WH"),
-                "database": os.environ.get("SNOWFLAKE_DATABASE", "TRADE_ANALYTICS"),
-                "schema": os.environ.get("SNOWFLAKE_TRANSFORM_SCHEMA", "GOLD"),
-            }
-        ).create()
+if filtered_df.empty:
+    st.warning("No trades match the current filters.")
+    st.stop()
 
+# --- Narrative headline --------------------------------------------------
+total_notional = filtered_df["NOTIONAL_USD"].sum()
+active_count = int((filtered_df["TRADE_STATUS"] == "ACTIVE").sum())
+active_pct = active_count / len(filtered_df) * 100
+by_product = filtered_df.groupby("PRODUCT_TYPE")["NOTIONAL_USD"].sum().sort_values(ascending=False)
+top_product, top_product_notional = by_product.index[0], by_product.iloc[0]
+top_product_pct = top_product_notional / total_notional * 100 if total_notional else 0
 
-@st.cache_data(ttl=60)
-def load_data():
-    session = get_session()
-    # rpt_trade_report is the flat, pre-joined reporting view (models/gold/rpt_trade_report.sql):
-    # every filterable attribute is already a plain column, so this dashboard
-    # never has to join dim_* tables itself.
-    report = session.sql("SELECT * FROM RPT_TRADE_REPORT").to_pandas()
-    # Snowpark's to_pandas() returns Snowflake DATE columns as plain
-    # datetime.date objects (object dtype), not pandas Timestamp/datetime64
-    # -- unlike a DB-API connector's read_sql, which returns datetime64
-    # directly. Normalizing here means every comparison below (pd.Timestamp,
-    # st.date_input's date objects) works the same regardless of which
-    # session path (native SiS vs. local Snowpark fallback) loaded the data.
-    report["TRADE_DATE"] = pd.to_datetime(report["TRADE_DATE"])
-    report["MATURITY_DATE"] = pd.to_datetime(report["MATURITY_DATE"])
-    rejected = session.sql(
-        """
-        SELECT reject_reason, count(*) as reject_count
-        FROM FCT_REJECTED_TRADES
-        GROUP BY reject_reason
-        ORDER BY reject_count DESC
-        """
-    ).to_pandas()
-    return report, rejected
-
-
-st.title("Trade Analytics — Pipeline Overview")
-
-report_df, rejected_df = load_data()
-
-# --- Filters (sidebar) -----------------------------------------------------
-st.sidebar.header("Filters")
-
-
-def multiselect_filter(label: str, column: str):
-    options = sorted(report_df[column].dropna().unique())
-    return st.sidebar.multiselect(label, options, default=[])
-
-
-trader_filter = multiselect_filter("Trader", "TRADER")
-book_filter = multiselect_filter("Book", "BOOK")
-counterparty_filter = multiselect_filter("Counterparty", "COUNTERPARTY")
-product_filter = multiselect_filter("Product type", "PRODUCT_TYPE")
-currency_filter = multiselect_filter("Currency", "CURRENCY")
-status_filter = st.sidebar.multiselect(
-    "Trade status", ["ACTIVE", "EXPIRED"], default=[]
+st.markdown(
+    f"**{len(filtered_df):,} trades** in view, worth **${total_notional:,.0f}** notional (USD) — "
+    f"**{active_pct:.0f}% active**. **{top_product}** is the largest exposure by notional, "
+    f"at ${top_product_notional:,.0f} ({top_product_pct:.0f}%)."
 )
 
-min_date, max_date = report_df["MATURITY_DATE"].min(), report_df["MATURITY_DATE"].max()
-maturity_range = st.sidebar.date_input(
-    "Maturity date range", value=(min_date, max_date), min_value=min_date, max_value=max_date
-)
+# --- KPI row ---------------------------------------------------------------
+c1, c2, c3, c4, c5 = st.columns(5)
+c1.metric("Trades (filtered)", f"{len(filtered_df):,}")
+c2.metric("Active", f"{active_count:,}")
+c3.metric("Expired", f"{len(filtered_df) - active_count:,}")
+c4.metric("Rejected (all-time)", f"{int(rejected_summary_df['REJECT_COUNT'].sum()):,}")
+c5.metric("Notional (USD)", f"${total_notional:,.0f}")
 
-filtered_df = report_df.copy()
-if trader_filter:
-    filtered_df = filtered_df[filtered_df["TRADER"].isin(trader_filter)]
-if book_filter:
-    filtered_df = filtered_df[filtered_df["BOOK"].isin(book_filter)]
-if counterparty_filter:
-    filtered_df = filtered_df[filtered_df["COUNTERPARTY"].isin(counterparty_filter)]
-if product_filter:
-    filtered_df = filtered_df[filtered_df["PRODUCT_TYPE"].isin(product_filter)]
-if currency_filter:
-    filtered_df = filtered_df[filtered_df["CURRENCY"].isin(currency_filter)]
-if status_filter:
-    filtered_df = filtered_df[filtered_df["TRADE_STATUS"].isin(status_filter)]
-if isinstance(maturity_range, tuple) and len(maturity_range) == 2:
-    start, end = maturity_range
-    filtered_df = filtered_df[
-        (filtered_df["MATURITY_DATE"] >= pd.Timestamp(start))
-        & (filtered_df["MATURITY_DATE"] <= pd.Timestamp(end))
-    ]
+st.divider()
 
-# --- Summary -----------------------------------------------------------
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Trades (filtered)", len(filtered_df))
-col2.metric("Active", int((filtered_df["TRADE_STATUS"] == "ACTIVE").sum()))
-col3.metric("Expired", int((filtered_df["TRADE_STATUS"] == "EXPIRED").sum()))
-col4.metric("Total notional (USD)", f"{filtered_df['NOTIONAL_USD'].sum():,.0f}")
+# --- 2x2 grid of small charts, each with a one-line dynamic caption -------
+CHART_HEIGHT = 240
 
-left, right = st.columns(2)
+row1_left, row1_right = st.columns(2)
+row2_left, row2_right = st.columns(2)
 
-with left:
-    st.subheader("Trades by status")
+with row1_left:
+    st.subheader("Status")
     status_counts = filtered_df["TRADE_STATUS"].value_counts().reset_index()
     status_counts.columns = ["status", "count"]
-    fig = px.pie(status_counts, names="status", values="count", hole=0.5)
+    fig = px.pie(status_counts, names="status", values="count", hole=0.55, height=CHART_HEIGHT)
+    fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), showlegend=True)
     st.plotly_chart(fig, use_container_width=True)
+    st.caption(f"{active_pct:.0f}% active, {100 - active_pct:.0f}% expired.")
 
-with right:
-    st.subheader("Notional (USD) by product type")
-    by_product = filtered_df.groupby("PRODUCT_TYPE")["NOTIONAL_USD"].sum().reset_index()
-    fig3 = px.bar(by_product, x="PRODUCT_TYPE", y="NOTIONAL_USD")
-    st.plotly_chart(fig3, use_container_width=True)
+with row1_right:
+    st.subheader("Notional by product")
+    fig = px.bar(by_product.reset_index(), x="PRODUCT_TYPE", y="NOTIONAL_USD", height=CHART_HEIGHT)
+    fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), xaxis_title=None, yaxis_title=None)
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption(f"{top_product} leads at ${top_product_notional:,.0f} ({top_product_pct:.0f}% of total).")
 
-st.subheader("Rejected trades by reason")
-fig2 = px.bar(rejected_df, x="REJECT_REASON", y="REJECT_COUNT")
-st.plotly_chart(fig2, use_container_width=True)
+with row2_left:
+    st.subheader("Notional by currency")
+    by_currency = filtered_df.groupby("CURRENCY")["NOTIONAL_USD"].sum().sort_values(ascending=False)
+    top_currency, top_currency_notional = by_currency.index[0], by_currency.iloc[0]
+    top_currency_pct = top_currency_notional / total_notional * 100 if total_notional else 0
+    fig = px.bar(by_currency.reset_index(), x="CURRENCY", y="NOTIONAL_USD", height=CHART_HEIGHT)
+    fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), xaxis_title=None, yaxis_title=None)
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption(f"{top_currency} dominates at {top_currency_pct:.0f}% of the book.")
 
-st.subheader(f"Trade report ({len(filtered_df)} rows)")
-st.dataframe(filtered_df, use_container_width=True)
+with row2_right:
+    st.subheader("Rejections by reason")
+    if rejected_summary_df.empty:
+        st.caption("No rejected trades recorded.")
+    else:
+        fig = px.bar(rejected_summary_df, x="REJECT_REASON", y="REJECT_COUNT", height=CHART_HEIGHT)
+        fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), xaxis_title=None, yaxis_title=None)
+        st.plotly_chart(fig, use_container_width=True)
+        top_reason = rejected_summary_df.iloc[0]
+        reason_pct = top_reason["REJECT_COUNT"] / rejected_summary_df["REJECT_COUNT"].sum() * 100
+        st.caption(f"{top_reason['REJECT_REASON']} is the top reason ({reason_pct:.0f}% of all rejects).")
 
-st.subheader("Rejected trades (audit)")
-st.dataframe(rejected_df, use_container_width=True)
+st.divider()
+st.page_link("pages/1_Trade_Details.py", label="Open Trade Details ->", icon="📄")

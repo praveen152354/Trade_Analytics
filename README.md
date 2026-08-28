@@ -62,34 +62,49 @@ code) doesn't have to join every dimension just to read them.
 star schema: `fct_trade_status` joined to `dim_date` twice (trade date and
 maturity date), with every filterable attribute already flattened into
 plain columns — no joins required by a BI tool or a dashboard. It's what
-`dashboard/streamlit_app.py` queries, with sidebar filters (trader, book,
-counterparty, product type, currency, status, maturity date range) applied
-against it.
+the dashboard queries, with filters (trader, book, counterparty, product
+type, currency, status, maturity date range) applied against it.
 
-### The dashboard — Streamlit in Snowflake
+### The dashboard — Streamlit in Snowflake, multi-page
 
-`dashboard/streamlit_app.py` runs natively inside Snowflake (a **Streamlit
-in Snowflake / SiS** app, `terraform/streamlit.tf`) rather than as a script
-on someone's laptop — no `.env`, no local Python process that has to keep
-running. It's a Snowflake object like any other Terraform-managed resource:
+Two pages, sharing filter state and query logic via `dashboard/common.py`:
+
+- **Summary** (`dashboard/streamlit_app.py`, the app's entry point) — a
+  one-line dynamic narrative computed from the filtered data (trade count,
+  total notional, active %, largest exposure), 5 KPI cards, and a 2×2 grid
+  of small charts (status, notional by product, notional by currency,
+  rejections by reason), each with its own dynamically-computed one-line
+  caption (e.g. "USD dominates at 61% of the book") rather than a chart
+  left to speak for itself.
+- **Trade Details** (`dashboard/pages/1_Trade_Details.py`) — the full
+  filtered table, a per-trade drill-down that queries
+  `valid_trades_snapshot` (the Type 2 SCD history) for whichever trade is
+  selected and reports how many amendments it's had, and the rejected-
+  trades audit log with its own reason filter.
+
+It runs natively inside Snowflake (a **Streamlit in Snowflake / SiS** app,
+`terraform/streamlit.tf`) rather than as a script on someone's laptop — no
+`.env`, no local Python process that has to keep running. It's a Snowflake
+object like any other Terraform-managed resource:
 `snowflake_stage.dashboard_stage` (`GOLD.DASHBOARD_STAGE`) holds the app
-file plus `dashboard/environment.yml` (Streamlit in Snowflake reads its
-package list from an `environment.yml` alongside the main file — every
-package in it, `streamlit`/`pandas`/`plotly`, has to exist in Snowflake's
-Anaconda channel; arbitrary `pip` packages aren't installable in the
-sandboxed SiS runtime), and `snowflake_streamlit.dashboard` registers the
-app itself, running queries on `TRADE_ANALYTICS_WH`. View it in Snowsight
-under **Projects → Streamlit**. The file *content* is uploaded via `PUT`
-outside Terraform — the same one deliberate exception as
+files (`streamlit_app.py`, `common.py`, `pages/1_Trade_Details.py`) plus
+`dashboard/environment.yml` (Streamlit in Snowflake reads its package list
+from an `environment.yml` alongside the main file — every package in it,
+`streamlit`/`pandas`/`plotly`, has to exist in Snowflake's Anaconda
+channel; arbitrary `pip` packages aren't installable in the sandboxed SiS
+runtime), and `snowflake_streamlit.dashboard` registers the app itself,
+running queries on `TRADE_ANALYTICS_WH`. View it in Snowsight under
+**Projects → Streamlit**. The file *content* is uploaded via `PUT` outside
+Terraform — the same one deliberate exception as
 `terraform/sql/generate_trade_files_procedure.sql`, since neither
 Terraform resource type can push file contents, only register the object
 that points at them.
 
 The app code itself works two ways with zero duplication:
-`get_active_session()` succeeds only when actually running inside
-Snowflake; locally (`streamlit run dashboard/streamlit_app.py`, using
-`dashboard/requirements.txt` + a populated `.env`) that call raises, and a
-`Session.builder` fallback builds an equivalent Snowpark session from
+`get_active_session()` (in `common.py`) succeeds only when actually running
+inside Snowflake; locally (`streamlit run dashboard/streamlit_app.py`,
+using `dashboard/requirements.txt` + a populated `.env`) that call raises,
+and a `Session.builder` fallback builds an equivalent Snowpark session from
 `.env` instead — every query after that point is identical
 `session.sql(...).to_pandas()` code either way.
 
