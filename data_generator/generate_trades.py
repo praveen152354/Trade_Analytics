@@ -34,13 +34,20 @@ BOOKS = ["RATES_BOOK_1", "RATES_BOOK_2", "FX_BOOK_1", "CREDIT_BOOK_1"]
 OUTPUT_DIR = Path(__file__).parent / "output"
 
 
-def random_maturity(days_min: int, days_max: int) -> str:
-    d = datetime.now(timezone.utc).date() + timedelta(days=random.randint(days_min, days_max))
+def random_maturity(days_min: int, days_max: int, reference_date=None) -> str:
+    ref = reference_date or datetime.now(timezone.utc).date()
+    d = ref + timedelta(days=random.randint(days_min, days_max))
     return d.isoformat()
 
 
-def new_trade(trade_id: str, version: int, maturity_offset=(1, 730)) -> dict:
-    now = datetime.now(timezone.utc)
+def new_trade(trade_id: str, version: int, maturity_offset=(1, 730), event_dt=None) -> dict:
+    # event_dt lets a backfill stamp a historical trade_date/event_timestamp
+    # instead of "now" (used by generate_backfill.py). maturity_date is
+    # computed relative to event_dt (when the trade was booked), not real
+    # "now" -- so a trade backfilled to 25 days ago with a small maturity
+    # offset can organically already be expired by today, same as it would
+    # have been had it really been booked back then.
+    now = event_dt or datetime.now(timezone.utc)
     return {
         "trade_id": trade_id,
         "version": version,
@@ -48,7 +55,7 @@ def new_trade(trade_id: str, version: int, maturity_offset=(1, 730)) -> dict:
         "message_id": str(uuid.uuid4()),
         "event_timestamp": now.isoformat(),
         "trade_date": now.date().isoformat(),
-        "maturity_date": random_maturity(*maturity_offset),
+        "maturity_date": random_maturity(*maturity_offset, reference_date=now.date()),
         "product_type": random.choice(PRODUCT_TYPES),
         "counterparty": random.choice(COUNTERPARTIES),
         "trader": random.choice(TRADERS),
@@ -61,8 +68,11 @@ def new_trade(trade_id: str, version: int, maturity_offset=(1, 730)) -> dict:
 
 
 def generate_batch(num_trades: int, pct_amendments: float, pct_out_of_order: float,
-                    pct_duplicates: float, pct_already_expired: float) -> list[dict]:
-    """Builds one batch of trade messages, seeding it with realistic edge cases."""
+                    pct_duplicates: float, pct_already_expired: float,
+                    event_dt=None) -> list[dict]:
+    """Builds one batch of trade messages, seeding it with realistic edge cases.
+    event_dt, if given, backdates every record in the batch to that
+    timestamp instead of "now" (see new_trade)."""
     records: list[dict] = []
     known_trades: dict[str, int] = {}  # trade_id -> highest version emitted so far
 
@@ -73,25 +83,25 @@ def generate_batch(num_trades: int, pct_amendments: float, pct_out_of_order: flo
             trade_id = random.choice(list(known_trades.keys()))
             new_version = known_trades[trade_id] + 1
             known_trades[trade_id] = new_version
-            rec = new_trade(trade_id, new_version)
+            rec = new_trade(trade_id, new_version, event_dt=event_dt)
 
         elif known_trades and roll < pct_amendments + pct_duplicates:
             trade_id = random.choice(list(known_trades.keys()))
-            rec = new_trade(trade_id, known_trades[trade_id])  # same version -> replace
+            rec = new_trade(trade_id, known_trades[trade_id], event_dt=event_dt)  # same version -> replace
 
         elif known_trades and roll < pct_amendments + pct_duplicates + pct_out_of_order:
             trade_id = random.choice(list(known_trades.keys()))
             stale_version = max(1, known_trades[trade_id] - 1)
-            rec = new_trade(trade_id, stale_version)  # lower version -> reject
+            rec = new_trade(trade_id, stale_version, event_dt=event_dt)  # lower version -> reject
 
         elif roll < pct_amendments + pct_duplicates + pct_out_of_order + pct_already_expired:
             trade_id = f"TRD-{uuid.uuid4().hex[:10].upper()}"
-            rec = new_trade(trade_id, 1, maturity_offset=(-30, -1))  # already matured -> expired
+            rec = new_trade(trade_id, 1, maturity_offset=(-30, -1), event_dt=event_dt)  # already matured -> expired
             known_trades[trade_id] = 1
 
         else:
             trade_id = f"TRD-{uuid.uuid4().hex[:10].upper()}"
-            rec = new_trade(trade_id, 1)
+            rec = new_trade(trade_id, 1, event_dt=event_dt)
             known_trades[trade_id] = 1
 
         records.append(rec)
@@ -119,17 +129,28 @@ def main():
     parser.add_argument("--pct-already-expired", type=float, default=0.05)
     parser.add_argument("--out-dir", type=str, default=str(OUTPUT_DIR))
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument(
+        "--trade-date", type=str, default=None,
+        help="Backdate every record in this batch to this date (YYYY-MM-DD) "
+             "instead of 'now' -- used to backfill history.",
+    )
     args = parser.parse_args()
 
     if args.seed is not None:
         random.seed(args.seed)
 
+    event_dt = None
+    if args.trade_date:
+        day = datetime.strptime(args.trade_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        event_dt = day + timedelta(hours=random.uniform(0, 23), minutes=random.uniform(0, 59))
+
     records = generate_batch(
-        args.num_trades,
-        args.pct_amendments,
-        args.pct_duplicates,
-        args.pct_out_of_order,
-        args.pct_already_expired,
+        num_trades=args.num_trades,
+        pct_amendments=args.pct_amendments,
+        pct_out_of_order=args.pct_out_of_order,
+        pct_duplicates=args.pct_duplicates,
+        pct_already_expired=args.pct_already_expired,
+        event_dt=event_dt,
     )
     out_path = write_batch(records, Path(args.out_dir))
     print(f"Wrote {len(records)} trade messages to {out_path}")
