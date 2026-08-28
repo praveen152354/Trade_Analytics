@@ -59,14 +59,18 @@ def state_color(state: str) -> str:
 
 
 def stage_box(icon: str, title: str, subtitle: str, color: str) -> str:
-    return f"""
-    <div style="flex:1; min-width:150px; border:2px solid {color}; border-radius:10px;
-                padding:14px 10px; text-align:center; background:{color}0d;">
-        <div style="font-size:32pt; line-height:1;">{icon}</div>
-        <div style="font-weight:700; margin-top:6px; font-size:10.5pt;">{title}</div>
-        <div style="font-size:8.8pt; color:#555; margin-top:2px;">{subtitle}</div>
-    </div>
-    """
+    # Single-line, zero leading whitespace on purpose: Markdown treats any
+    # line indented 4+ spaces as a literal code block, which would print
+    # this HTML as text instead of rendering it (hit live -- Streamlit
+    # itself was never the problem, a multi-line indented f-string was).
+    return (
+        f'<div style="flex:1; min-width:150px; border:2px solid {color}; border-radius:10px; '
+        f'padding:14px 10px; text-align:center; background:{color}0d;">'
+        f'<div style="font-size:32pt; line-height:1;">{icon}</div>'
+        f'<div style="font-weight:700; margin-top:6px; font-size:10.5pt;">{title}</div>'
+        f'<div style="font-size:8.8pt; color:#555; margin-top:2px;">{subtitle}</div>'
+        f'</div>'
+    )
 
 
 arrow = '<div style="display:flex; align-items:center; font-size:18pt; color:#aaa; padding:0 4px;">&#8594;</div>'
@@ -75,28 +79,27 @@ gen_state = task_state.get("GENERATE_TRADE_FILES_TASK", {}).get("CURRENT_STATE",
 ingest_trades_state = task_state.get("INGEST_TRADES_TASK", {}).get("CURRENT_STATE", "unknown")
 ingest_fx_state = task_state.get("INGEST_FX_RATES_TASK", {}).get("CURRENT_STATE", "unknown")
 
-flow_html = f"""
-<div style="display:flex; align-items:stretch; gap:2px; margin:14px 0; flex-wrap:wrap;">
-    {stage_box("🏭", "Generate", "Snowpark proc -> stage", state_color(gen_state))}
-    {arrow}
-    {stage_box("📥", "Ingest Trades", "COPY INTO TRADES_RAW", state_color(ingest_trades_state))}
-    {arrow}
-    {stage_box("🌊", "Stream", "backlog: " + ("yes" if stream_has_backlog else "none"), "#a35a00" if stream_has_backlog else "#1a7a3c")}
-    {arrow}
-    {stage_box("🔧", "Transform (dbt)", "SILVER -> GOLD", "#1a7a3c" if freshness["last_valid_trade_processed"] else "#888")}
-    {arrow}
-    {stage_box("⭐", "Gold / Dashboard", "rpt_trade_report", "#1a7a3c")}
-</div>
-<div style="display:flex; align-items:stretch; gap:2px; margin:4px 0 18px 0; flex-wrap:wrap;">
-    <div style="flex:1;"></div>
-    <div style="flex:1;"></div>
-    {stage_box("💱", "Ingest FX Rates", "COPY INTO FX_RATES_RAW", state_color(ingest_fx_state))}
-    <div style="flex:1;"></div>
-    <div style="flex:1;"></div>
-    <div style="flex:1;"></div>
-    <div style="flex:1;"></div>
-</div>
-"""
+row1 = (
+    '<div style="display:flex; align-items:stretch; gap:2px; margin:14px 0; flex-wrap:wrap;">'
+    + stage_box("🏭", "Generate", "Snowpark proc -> stage", state_color(gen_state))
+    + arrow
+    + stage_box("📥", "Ingest Trades", "COPY INTO TRADES_RAW", state_color(ingest_trades_state))
+    + arrow
+    + stage_box("🌊", "Stream", "backlog: " + ("yes" if stream_has_backlog else "none"), "#a35a00" if stream_has_backlog else "#1a7a3c")
+    + arrow
+    + stage_box("🔧", "Transform (dbt)", "SILVER -> GOLD", "#1a7a3c" if freshness["last_valid_trade_processed"] else "#888")
+    + arrow
+    + stage_box("⭐", "Gold / Dashboard", "rpt_trade_report", "#1a7a3c")
+    + '</div>'
+)
+row2 = (
+    '<div style="display:flex; align-items:stretch; gap:2px; margin:4px 0 18px 0; flex-wrap:wrap;">'
+    + '<div style="flex:1;"></div><div style="flex:1;"></div>'
+    + stage_box("💱", "Ingest FX Rates", "COPY INTO FX_RATES_RAW", state_color(ingest_fx_state))
+    + '<div style="flex:1;"></div><div style="flex:1;"></div><div style="flex:1;"></div><div style="flex:1;"></div>'
+    + '</div>'
+)
+flow_html = row1 + row2
 st.markdown(flow_html, unsafe_allow_html=True)
 
 st.divider()
