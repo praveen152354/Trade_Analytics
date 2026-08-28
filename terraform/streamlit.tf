@@ -38,52 +38,18 @@ resource "snowflake_grant_privileges_to_account_role" "transformer_dashboard_usa
 # A Streamlit app runs with its OWNER's rights, not the viewer's -- and the
 # owner here is var.bootstrap_role (whichever role ran terraform apply),
 # not the transformer role that actually owns the GOLD tables/views dbt
-# builds. Without this, the app fails at query time with "Insufficient
-# privileges... owner role <bootstrap_role> must have SELECT granted" even
-# though the viewer's own role can already query GOLD fine. Both "all"
-# (today's already-existing tables/views -- what the app needs immediately)
-# and "future" (so a newly added dbt model works without a new grant) are
-# needed; ON FUTURE alone does not retroactively cover existing objects.
-resource "snowflake_grant_privileges_to_account_role" "bootstrap_gold_select_tables" {
-  account_role_name = var.bootstrap_role
-  privileges        = ["SELECT"]
-  on_schema_object {
-    all {
-      object_type_plural = "TABLES"
-      in_schema          = snowflake_schema.schemas["GOLD"].fully_qualified_name
-    }
-  }
-}
-
-resource "snowflake_grant_privileges_to_account_role" "bootstrap_gold_select_views" {
-  account_role_name = var.bootstrap_role
-  privileges        = ["SELECT"]
-  on_schema_object {
-    all {
-      object_type_plural = "VIEWS"
-      in_schema          = snowflake_schema.schemas["GOLD"].fully_qualified_name
-    }
-  }
-}
-
-resource "snowflake_grant_privileges_to_account_role" "bootstrap_gold_select_future_tables" {
-  account_role_name = var.bootstrap_role
-  privileges        = ["SELECT"]
-  on_schema_object {
-    future {
-      object_type_plural = "TABLES"
-      in_schema          = snowflake_schema.schemas["GOLD"].fully_qualified_name
-    }
-  }
-}
-
-resource "snowflake_grant_privileges_to_account_role" "bootstrap_gold_select_future_views" {
-  account_role_name = var.bootstrap_role
-  privileges        = ["SELECT"]
-  on_schema_object {
-    future {
-      object_type_plural = "VIEWS"
-      in_schema          = snowflake_schema.schemas["GOLD"].fully_qualified_name
-    }
-  }
-}
+# builds. It needs SELECT on the GOLD objects it queries (rpt_trade_report,
+# fct_rejected_trades), or it fails at query time with "Insufficient
+# privileges... owner role <bootstrap_role> must have SELECT granted".
+#
+# That grant is NOT managed here in Terraform (a prior version of this file
+# did, via "all"/"future" SELECT grants on GOLD) -- it's managed by dbt's
+# own `grants` model config (dbt_project.yml + per-model config()), the
+# same mechanism that grants TRADE_ANALYTICS_COMPLIANCE/ANALYST. Every GOLD
+# object is dbt-managed, and dbt's grants are authoritative: it revokes any
+# grant not in a model's declared list on every run. Managing the same
+# grant from both Terraform AND dbt meant each run of one silently undid
+# the other -- live-verified as the actual cause of the app breaking after
+# a dbt run once ACCOUNTADMIN wasn't in dbt's declared grants list. dbt's
+# `grants` config now includes ACCOUNTADMIN everywhere it needs to, and
+# this is the one place that access is controlled.

@@ -1,7 +1,7 @@
 {{
   config(
     materialized='view',
-    grants={'select': ['TRADE_ANALYTICS_COMPLIANCE', 'TRADE_ANALYTICS_ANALYST']},
+    grants={'select': ['TRADE_ANALYTICS_COMPLIANCE', 'TRADE_ANALYTICS_ANALYST', 'ACCOUNTADMIN']},
     post_hook=[
       "alter view {{ this }} modify column notional set masking policy " ~ target.database ~ ".gold.mask_notional",
       "alter view {{ this }} modify column notional_usd set masking policy " ~ target.database ~ ".gold.mask_notional",

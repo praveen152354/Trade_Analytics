@@ -36,6 +36,15 @@ on-run-start:
 # actually attached to. Granting it broadly here would let it query
 # fct_valid_trades directly and read NOTIONAL/COUNTERPARTY unmasked,
 # defeating the point.
+#
+# ACCOUNTADMIN is in every `grants` list here for a different reason: it's
+# var.bootstrap_role, the owner of the Streamlit app (terraform/streamlit.tf)
+# -- a Streamlit app runs with its OWNER's rights, not the viewer's, so it
+# needs its own SELECT on whatever it queries. dbt's grants are
+# authoritative (it revokes anything not declared, on every run), so this
+# can't be granted from Terraform alongside it without the two fighting
+# over the same grant -- live-verified as exactly what broke the dashboard
+# once ACCOUNTADMIN was missing from a model's declared list here.
 models:
   trade_analytics:
     bronze:
@@ -47,13 +56,13 @@ models:
     gold:
       +schema: gold
       +grants:
-        select: ["TRADE_ANALYTICS_COMPLIANCE"]
+        select: ["TRADE_ANALYTICS_COMPLIANCE", "ACCOUNTADMIN"]
 
 snapshots:
   trade_analytics:
     +schema: gold
     +grants:
-      select: ["TRADE_ANALYTICS_COMPLIANCE"]
+      select: ["TRADE_ANALYTICS_COMPLIANCE", "ACCOUNTADMIN"]
 
 vars:
   # Earliest timestamp used to seed incremental watermark comparisons.
