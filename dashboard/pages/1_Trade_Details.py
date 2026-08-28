@@ -17,7 +17,6 @@ report_df = load_report()
 filtered_df = render_filters(report_df)
 
 st.subheader(f"Trade report ({len(filtered_df):,} rows)")
-st.caption("Same filters as the Summary page -- selections carry over between pages.")
 st.dataframe(filtered_df, use_container_width=True, height=350)
 
 st.divider()
