@@ -2,7 +2,8 @@
   config(
     materialized='incremental',
     on_schema_change='append_new_columns',
-    transient=true
+    transient=true,
+    full_refresh=false
   )
 }}
 
@@ -18,6 +19,22 @@
 -- INSERT, is what consumes it and advances its offset in Snowflake. Every
 -- dbt run (incremental or first-run full build) drains whatever the stream
 -- currently holds, so no separate watermark is needed at this layer.
+--
+-- full_refresh=false is load-bearing, not stylistic: a --full-refresh here
+-- would TRUNCATE this table and rebuild it from "whatever the stream
+-- currently holds" -- but a stream only holds *unconsumed* changes, not
+-- history, so any full-refresh after the stream has already been drained
+-- by earlier normal runs silently and permanently discards everything
+-- processed before that point (recoverable only because BRONZE.TRADES_RAW,
+-- the append-only source table, is untouched by this -- this happened
+-- live in this project and was recovered by rebuilding this table directly
+-- from BRONZE.TRADES_RAW instead of the stream, then full-refreshing
+-- int_trades_evaluated onward, which read from this table, not the
+-- stream, and are safe to full-refresh). This config makes dbt ignore
+-- --full-refresh for this model specifically, even when passed at the
+-- project level -- the only correct way to rebuild it is the recovery
+-- path above, deliberately, not as a side effect of an unrelated
+-- full-refresh elsewhere.
 
 with source as (
 
