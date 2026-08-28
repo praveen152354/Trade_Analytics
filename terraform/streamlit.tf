@@ -8,7 +8,7 @@ resource "snowflake_stage" "dashboard_stage" {
   name     = "DASHBOARD_STAGE"
   database = snowflake_database.trade_analytics.name
   schema   = "GOLD"
-  comment  = "Holds the Streamlit app file(s) for the trade dashboard. Content (streamlit_app.py, environment.yml) is PUT here outside Terraform -- same one deliberate exception as terraform/sql/generate_trade_files_procedure.sql."
+  comment  = "Holds the Streamlit app file(s) for the trade dashboard. Content (Summary.py, common.py, pages/1_Trade_Details.py, environment.yml) is PUT here outside Terraform -- same one deliberate exception as terraform/sql/generate_trade_files_procedure.sql."
 
   depends_on = [snowflake_schema.schemas]
 }
@@ -18,10 +18,10 @@ resource "snowflake_streamlit" "dashboard" {
   database        = snowflake_database.trade_analytics.name
   schema          = "GOLD"
   stage           = snowflake_stage.dashboard_stage.fully_qualified_name
-  main_file       = "streamlit_app.py"
+  main_file       = "Summary.py"
   query_warehouse = snowflake_warehouse.trade_analytics_wh.name
   title           = "Trade Analytics"
-  comment         = "Filterable trade report + rejection breakdown, reading rpt_trade_report / fct_rejected_trades. Source: dashboard/streamlit_app.py."
+  comment         = "Filterable trade report + rejection breakdown, reading rpt_trade_report / fct_rejected_trades. Source: dashboard/Summary.py."
 
   depends_on = [snowflake_stage.dashboard_stage]
 }

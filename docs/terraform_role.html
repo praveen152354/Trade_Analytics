@@ -135,7 +135,7 @@
       <li><b>The state backend bucket itself</b> — Terraform can't create the bucket it's about to store its own records in (nothing to point at yet). Bootstrapped once via a small Python script, outside the regular apply flow.</li>
       <li><b>dbt Cloud</b> — jobs, environments, and the Snowflake connection on the dbt Cloud side were set up via dbt Cloud's own API, not Terraform (no mature Terraform provider was used for this).</li>
       <li><b>The BRONZE passthrough views</b> themselves (<code>base_trades_raw</code>, <code>base_fx_rates_raw</code>) and the <code>silver.fx_rates</code> merge-dedup model — these are dbt models, not Terraform resources. Terraform's role stops at granting the transformer role permission to create them (see the <code>CREATE VIEW</code> grant above); dbt owns the SQL.</li>
-      <li><b>The Streamlit app's actual file content</b> (<code>streamlit_app.py</code>, <code>environment.yml</code>) — <code>streamlit.tf</code> registers the app object and the stage it lives on, but pushing file bytes onto a stage isn't something either Terraform resource type does. Uploaded via a one-time <code>PUT</code>, the same pattern as <code>GENERATE_TRADE_FILES</code>.</li>
+      <li><b>The Streamlit app's actual file content</b> (<code>Summary.py</code>, <code>common.py</code>, <code>pages/1_Trade_Details.py</code>, <code>environment.yml</code>) — <code>streamlit.tf</code> registers the app object and the stage it lives on, but pushing file bytes onto a stage isn't something either Terraform resource type does. Uploaded via a one-time <code>PUT</code>, the same pattern as <code>GENERATE_TRADE_FILES</code>.</li>
     </ul>
   </div>
   <div class="scope-col scope-yes">

@@ -69,7 +69,10 @@ type, currency, status, maturity date range) applied against it.
 
 Two pages, sharing filter state and query logic via `dashboard/common.py`:
 
-- **Summary** (`dashboard/streamlit_app.py`, the app's entry point) — a
+- **Summary** (`dashboard/Summary.py`, the app's entry point — named so
+  Streamlit's sidebar nav, which derives a page's label from its filename
+  for the entry file, actually reads "Summary" instead of "streamlit app")
+  — a
   one-line dynamic narrative computed from the filtered data (trade count,
   total notional, active %, largest exposure), 5 KPI cards, and a 2×2 grid
   of small charts (status, notional by product, notional by currency,
@@ -87,7 +90,7 @@ It runs natively inside Snowflake (a **Streamlit in Snowflake / SiS** app,
 `.env`, no local Python process that has to keep running. It's a Snowflake
 object like any other Terraform-managed resource:
 `snowflake_stage.dashboard_stage` (`GOLD.DASHBOARD_STAGE`) holds the app
-files (`streamlit_app.py`, `common.py`, `pages/1_Trade_Details.py`) plus
+files (`Summary.py`, `common.py`, `pages/1_Trade_Details.py`) plus
 `dashboard/environment.yml` (Streamlit in Snowflake reads its package list
 from an `environment.yml` alongside the main file — every package in it,
 `streamlit`/`pandas`/`plotly`, has to exist in Snowflake's Anaconda
@@ -102,7 +105,7 @@ that points at them.
 
 The app code itself works two ways with zero duplication:
 `get_active_session()` (in `common.py`) succeeds only when actually running
-inside Snowflake; locally (`streamlit run dashboard/streamlit_app.py`,
+inside Snowflake; locally (`streamlit run dashboard/Summary.py`,
 using `dashboard/requirements.txt` + a populated `.env`) that call raises,
 and a `Session.builder` fallback builds an equivalent Snowpark session from
 `.env` instead — every query after that point is identical

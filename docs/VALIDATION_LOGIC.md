@@ -59,7 +59,7 @@ stg_trades -> int_trades_evaluated -> fct_valid_trades ---> fct_trade_status -> 
 - **`rpt_trade_report`** (view) — the flat reporting layer: `fct_trade_status`
   joined to `dim_date` twice (trade date and maturity date), with every
   filterable attribute already denormalized into plain columns. This is
-  what `dashboard/streamlit_app.py` and any downstream BI tool should
+  what `dashboard/Summary.py` and any downstream BI tool should
   query — no joins required.
 - **`valid_trades_snapshot`** (dbt snapshot, `check` strategy, Type 2 SCD) —
   a point-in-time history of `fct_valid_trades`. Unlike the models above it

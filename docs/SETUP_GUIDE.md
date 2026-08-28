@@ -197,12 +197,16 @@ Open http://localhost:8080 (`AIRFLOW_ADMIN_USER` / `AIRFLOW_ADMIN_PASSWORD`
 from `.env`, default `admin`/`admin`), unpause the `trade_pipeline` DAG. It
 runs every 30 minutes and can be triggered manually from the UI.
 
-## 7. (Optional) Dashboard
+## 7. Dashboard
+
+Runs natively in Snowflake (Streamlit in Snowflake) once `terraform apply`
+has provisioned `terraform/streamlit.tf` — view it in Snowsight under
+**Projects → Streamlit**. For local development instead:
 
 ```powershell
 cd dashboard
 pip install -r requirements.txt
-streamlit run streamlit_app.py
+streamlit run Summary.py
 ```
 
 ## 8. CI/CD

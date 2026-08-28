@@ -1,6 +1,6 @@
 """
 Shared session, data-loading, and filter logic for every page of the
-multi-page dashboard (streamlit_app.py = Summary, pages/*.py = Details).
+multi-page dashboard (Summary.py = Summary, pages/*.py = Details).
 Kept in one place so both pages query the same cached data and share the
 same filter state across navigation (via st.session_state-backed widget
 keys) instead of drifting or duplicating the connection logic.
@@ -115,6 +115,7 @@ def render_filters(report_df: pd.DataFrame) -> pd.DataFrame:
 
     def multiselect_filter(label: str, column: str, key: str):
         options = sorted(report_df[column].dropna().unique())
+        st.session_state.setdefault(key, [])
         return st.sidebar.multiselect(label, options, key=key)
 
     trader_filter = multiselect_filter("Trader", "TRADER", "flt_trader")
@@ -122,14 +123,21 @@ def render_filters(report_df: pd.DataFrame) -> pd.DataFrame:
     counterparty_filter = multiselect_filter("Counterparty", "COUNTERPARTY", "flt_counterparty")
     product_filter = multiselect_filter("Product type", "PRODUCT_TYPE", "flt_product")
     currency_filter = multiselect_filter("Currency", "CURRENCY", "flt_currency")
+    st.session_state.setdefault("flt_status", [])
     status_filter = st.sidebar.multiselect(
         "Trade status", ["ACTIVE", "EXPIRED"], key="flt_status"
     )
 
+    # setdefault() BEFORE creating the widget, then key= alone drives it --
+    # no value= passed at all. Passing both value= and key= (even when
+    # value is itself derived from session_state) is a documented Streamlit
+    # anti-pattern that can fight with the widget's own state handling;
+    # this is the pattern Streamlit's own docs recommend for a value that
+    # must persist across reruns/pages.
     min_trade_date, max_trade_date = report_df["TRADE_DATE"].min(), report_df["TRADE_DATE"].max()
+    st.session_state.setdefault("flt_trade_date", (min_trade_date, max_trade_date))
     trade_date_range = st.sidebar.date_input(
         "Trade (booking) date range",
-        value=st.session_state.get("flt_trade_date", (min_trade_date, max_trade_date)),
         min_value=min_trade_date,
         max_value=max_trade_date,
         key="flt_trade_date",
@@ -141,9 +149,9 @@ def render_filters(report_df: pd.DataFrame) -> pd.DataFrame:
     # how far in the past it was booked (see the "Trade (booking) date
     # range" filter above for that).
     min_date, max_date = report_df["MATURITY_DATE"].min(), report_df["MATURITY_DATE"].max()
+    st.session_state.setdefault("flt_maturity", (min_date, max_date))
     maturity_range = st.sidebar.date_input(
         "Maturity date range",
-        value=st.session_state.get("flt_maturity", (min_date, max_date)),
         min_value=min_date,
         max_value=max_date,
         key="flt_maturity",

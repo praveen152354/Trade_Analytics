@@ -9,7 +9,7 @@ session/data/filter logic lives in common.py so both pages stay in sync.
 Runs two ways with the same code -- see common.get_session():
   1. Natively inside Snowflake (Streamlit in Snowflake / SiS), deployed by
      terraform/streamlit.tf. The primary, "live" way to view it.
-  2. Locally: `streamlit run dashboard/streamlit_app.py` (needs
+  2. Locally: `streamlit run dashboard/Summary.py` (needs
      dashboard/requirements.txt and a populated .env).
 """
 
