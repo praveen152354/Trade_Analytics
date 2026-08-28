@@ -22,8 +22,9 @@ terraform/*.tfstate*
 terraform/.terraform.lock.hcl
 terraform/crash.log
 
-# Generated trade data
+# Generated trade data / FX rate files (for manual S3 upload -- see data_generator/generate_fx_rates.py)
 data_generator/output/*.jsonl
+data_generator/output/fx_rates/*.csv
 
 # Airflow
 orchestration/airflow/logs/
@@ -43,3 +44,4 @@ dbt/trade_analytics/.user.yml
 # Generated deliverable docs (source is tracked; regenerate, don't commit the binary)
 Trade_Analytics_Summary.docx
 Trade_Analytics_Project_Flow_Explained.pdf
+Trade_Analytics_Terraform_Role_Explained.pdf
