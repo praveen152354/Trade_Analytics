@@ -1,0 +1,11 @@
+# Read automatically by Streamlit in Snowflake from the same stage location
+# as streamlit_app.py. Every package here must be available in Snowflake's
+# Anaconda channel (streamlit, pandas, plotly all are) -- pip packages
+# aren't installable inside SiS's sandboxed runtime.
+name: app_environment
+channels:
+  - snowflake
+dependencies:
+  - streamlit
+  - pandas
+  - plotly

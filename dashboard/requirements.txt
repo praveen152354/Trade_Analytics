@@ -1,5 +1,5 @@
 streamlit==1.38.0
-snowflake-connector-python==3.12.3
+snowflake-snowpark-python==1.22.1
 pandas==2.2.2
 plotly==5.24.0
 python-dotenv==1.0.1

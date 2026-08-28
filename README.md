@@ -18,7 +18,8 @@ snowflake_sql/          ready-to-run SQL: debugging, time travel, cost/perf
 dbt/trade_analytics/    models/silver -> models/gold -> snapshots (Type 2 SCD)
 orchestration/airflow/  Docker Compose Airflow stack — an alternative
                         orchestrator, documented but not the primary path
-dashboard/              optional Streamlit trade-status dashboard
+dashboard/              Streamlit trade-status dashboard -- runs natively in
+                        Snowflake (Streamlit in Snowflake), see below
 .github/workflows/      CI/CD for dbt and Terraform
 docs/                   architecture diagram, setup guide, validation logic,
                         scalability/monitoring write-up
@@ -64,6 +65,33 @@ plain columns — no joins required by a BI tool or a dashboard. It's what
 `dashboard/streamlit_app.py` queries, with sidebar filters (trader, book,
 counterparty, product type, currency, status, maturity date range) applied
 against it.
+
+### The dashboard — Streamlit in Snowflake
+
+`dashboard/streamlit_app.py` runs natively inside Snowflake (a **Streamlit
+in Snowflake / SiS** app, `terraform/streamlit.tf`) rather than as a script
+on someone's laptop — no `.env`, no local Python process that has to keep
+running. It's a Snowflake object like any other Terraform-managed resource:
+`snowflake_stage.dashboard_stage` (`GOLD.DASHBOARD_STAGE`) holds the app
+file plus `dashboard/environment.yml` (Streamlit in Snowflake reads its
+package list from an `environment.yml` alongside the main file — every
+package in it, `streamlit`/`pandas`/`plotly`, has to exist in Snowflake's
+Anaconda channel; arbitrary `pip` packages aren't installable in the
+sandboxed SiS runtime), and `snowflake_streamlit.dashboard` registers the
+app itself, running queries on `TRADE_ANALYTICS_WH`. View it in Snowsight
+under **Projects → Streamlit**. The file *content* is uploaded via `PUT`
+outside Terraform — the same one deliberate exception as
+`terraform/sql/generate_trade_files_procedure.sql`, since neither
+Terraform resource type can push file contents, only register the object
+that points at them.
+
+The app code itself works two ways with zero duplication:
+`get_active_session()` succeeds only when actually running inside
+Snowflake; locally (`streamlit run dashboard/streamlit_app.py`, using
+`dashboard/requirements.txt` + a populated `.env`) that call raises, and a
+`Session.builder` fallback builds an equivalent Snowpark session from
+`.env` instead — every query after that point is identical
+`session.sql(...).to_pandas()` code either way.
 
 dbt's own folder convention (`models/bronze/`, `models/silver/`,
 `models/gold/`) matches the physical schemas 1:1 in this project, though

@@ -18,5 +18,8 @@ provider "snowflake" {
     "snowflake_procedure_python_resource",
     "snowflake_alert_resource",
     "snowflake_storage_integration_resource",
+    # Note: snowflake_streamlit is already GA in this provider version --
+    # not in the preview list above (adding it errors: "not a valid
+    # preview feature"). See terraform/streamlit.tf.
   ]
 }

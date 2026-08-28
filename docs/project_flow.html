@@ -290,8 +290,10 @@
 </div>
 
 <div class="component">
-  <div class="comp-head"><span class="comp-icon">📊</span><h3>Dashboard (Optional)</h3><span class="layer-tag tag-support">supporting</span></div>
-  <p>A simple web page that queries the reporting table directly and shows, at a glance, how many trades are active vs. expired, and why trades have been rejected recently — with filters down the side (trader, book, counterparty, product, currency, status, and a maturity-date range) so a user can narrow the view to exactly the trades they care about. It's optional and separate from the pipeline itself — it's a consumer of Gold data, not a part of building it.</p>
+  <div class="comp-head"><span class="comp-icon">📊</span><h3>Dashboard — Live, Inside Snowflake</h3><span class="layer-tag tag-support">supporting</span></div>
+  <p>A web page that queries the reporting table directly and shows, at a glance, how many trades are active vs. expired, and why trades have been rejected recently — with filters down the side (trader, book, counterparty, product, currency, status, and a maturity-date range) so a user can narrow the view to exactly the trades they care about. It's optional and separate from the pipeline itself — it's a consumer of Gold data, not a part of building it. It runs as a <b>Streamlit in Snowflake</b> app: the dashboard's code lives and executes inside Snowflake itself, not on anyone's laptop, so it's always reachable by opening Snowsight rather than something someone has to remember to start.</p>
+  <div class="why"><b>Why does "runs inside Snowflake" matter?</b> A dashboard that only works when a particular laptop has a terminal open isn't really "live" — it's a demo. Running it as a native Snowflake object means it's on the same always-available compute as everything else in this pipeline, with no separate credentials to manage and no separate hosting to keep paying for.</div>
+  <div class="analogy">Like the difference between a report someone has to remember to email out versus a live dashboard on the wall of the trading floor — the second one is just always there.</div>
 </div>
 
 <!-- ================= GLOSSARY ================= -->
@@ -307,6 +309,7 @@
   <tr><td>Storage Integration</td><td>Snowflake's secure way of connecting to a cloud storage bucket (like S3) using a trusted role instead of a stored password/key.</td></tr>
   <tr><td>IaC (Infrastructure as Code)</td><td>Describing infrastructure (servers, tables, permissions) in code files instead of clicking through a web console, so it's repeatable and version-controlled.</td></tr>
   <tr><td>CI/CD</td><td>Automated checks and deployments triggered by code changes — "Continuous Integration / Continuous Delivery."</td></tr>
+  <tr><td>Streamlit in Snowflake</td><td>Snowflake's native way of hosting a small data app: the app's code runs inside Snowflake itself, using an existing warehouse for compute, instead of on a separate server someone has to run and pay for.</td></tr>
 </table>
 
 <div class="callout">💡 <b>The one-sentence version:</b> Trades and daily FX rates flow in from two different sources, get progressively cleaned and validated through Bronze → Silver → Gold, are watched over by two independent schedulers with automatic retries and email alerts, and the entire environment that makes this possible is written as code so it can be rebuilt on demand.</div>

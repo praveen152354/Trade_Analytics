@@ -120,6 +120,8 @@ def build():
             ["FX_RATES_CSV_FORMAT", "File format", "BRONZE", "CSV, skip_header=1."],
             ["FX_RATES_RAW", "Table", "BRONZE", "Append-only landing table for daily FX rates (as_of_date, currency, rate_to_usd)."],
             ["INGEST_FX_RATES_TASK", "Task", "BRONZE", "COPY INTOs new S3 files once daily (configurable). No PURGE -- IAM policy is read-only and it's the user's own bucket."],
+            ["DASHBOARD_STAGE", "Stage", "GOLD", "Holds the Streamlit app file(s) -- content PUT here outside Terraform, same exception as GENERATE_TRADE_FILES."],
+            ["TRADE_ANALYTICS_DASHBOARD", "Streamlit app (Streamlit in Snowflake)", "GOLD", "The trade dashboard, running natively in Snowflake on TRADE_ANALYTICS_WH -- no local process. Viewable in Snowsight (Projects -> Streamlit)."],
         ],
         col_widths=[1.7, 1.5, 1.0, 3.2],
     )
@@ -263,7 +265,7 @@ def build():
             ["dbt/trade_analytics/models/gold/rpt_trade_report.sql", "Flat reporting view -- what dashboard/streamlit_app.py queries."],
             ["dbt Cloud (external, not a repo file)", "Hourly job: dbt run then dbt test. Separate monthly job: dbt snapshot. Reads this repo via a read-only deploy key; separate Development and Production environments."],
             ["orchestration/airflow/ (alternative)", "Complete Docker Compose Airflow stack, documented but not the primary orchestration path."],
-            ["dashboard/streamlit_app.py", "Streamlit report over rpt_trade_report, with sidebar filters (trader, book, counterparty, product, currency, status, maturity date range) and a rejected-trades breakdown."],
+            ["dashboard/streamlit_app.py + environment.yml", "Streamlit report over rpt_trade_report, with sidebar filters (trader, book, counterparty, product, currency, status, maturity date range) and a rejected-trades breakdown. Runs natively in Snowflake (Streamlit in Snowflake, terraform/streamlit.tf) -- no local process; works locally too (streamlit run) via a Snowpark-session fallback, same code either way."],
             ["snowflake_sql/observability_toolkit.sql", "Ready-to-run debugging, time-travel, optimization and monitoring queries."],
             [".github/workflows/dbt_ci.yml, terraform_ci.yml", "CI/CD: dbt build/test on PR + merge; terraform fmt/validate/plan on PR, apply on manual dispatch (sequenced after plan to avoid an S3 state-lock race -- both verified live)."],
             ["docs/SETUP_GUIDE.md, VALIDATION_LOGIC.md, SCALABILITY.md", "Step-by-step setup, rule-by-rule rationale, and the failure-handling / monitoring / 10,000x-scale write-up."],
@@ -308,8 +310,9 @@ def build():
         "                       rpt_trade_report  (flat, pre-joined --\n"
         "                              |            what the dashboard queries)\n"
         "                              v\n"
-        "                    Streamlit dashboard (filters: trader, book,\n"
-        "                    counterparty, product, currency, status, maturity range)\n"
+        "                    Streamlit dashboard (Streamlit in Snowflake --\n"
+        "                    filters: trader, book, counterparty, product,\n"
+        "                    currency, status, maturity range)\n"
         "\n"
         "Manual upload --> S3 (fx_rates/) --> FX_RATES_STAGE\n"
         "                                          |  polls, once daily\n"

@@ -1,54 +1,69 @@
 """
 Optional visualization layer: a filterable trade report plus a pipeline
 overview (active/expired/rejected), read straight from the GOLD marts.
-Run with:
 
-    streamlit run dashboard/streamlit_app.py
+Runs two ways with the same code:
+  1. Natively inside Snowflake (Streamlit in Snowflake / SiS) -- deployed by
+     terraform/streamlit.tf, no local machine or credentials involved at
+     all. This is the primary, "live" way to view it.
+  2. Locally, for development: `streamlit run dashboard/streamlit_app.py`
+     (needs dashboard/requirements.txt and a populated .env).
+
+get_active_session() only succeeds when actually running inside Snowflake;
+locally it raises, and the except branch builds an equivalent Snowpark
+session from .env instead. Everything after that point is identical code
+either way -- session.sql(...).to_pandas().
 """
 
 import os
 
 import pandas as pd
 import plotly.express as px
-import snowflake.connector
 import streamlit as st
-from dotenv import load_dotenv
-
-load_dotenv()
 
 st.set_page_config(page_title="Trade Analytics", layout="wide")
 
 
 @st.cache_resource
-def get_connection():
-    return snowflake.connector.connect(
-        account=os.environ["SNOWFLAKE_ACCOUNT"],
-        user=os.environ["SNOWFLAKE_USER"],
-        password=os.environ.get("SNOWFLAKE_PASSWORD"),
-        private_key_path=os.environ.get("SNOWFLAKE_PRIVATE_KEY_PATH") or None,
-        role=os.environ.get("SNOWFLAKE_TRANSFORMER_ROLE", "TRADE_ANALYTICS_TRANSFORMER"),
-        warehouse=os.environ.get("SNOWFLAKE_WAREHOUSE", "TRADE_ANALYTICS_WH"),
-        database=os.environ.get("SNOWFLAKE_DATABASE", "TRADE_ANALYTICS"),
-        schema=os.environ.get("SNOWFLAKE_TRANSFORM_SCHEMA", "GOLD"),
-    )
+def get_session():
+    try:
+        from snowflake.snowpark.context import get_active_session
+
+        return get_active_session()
+    except Exception:
+        from dotenv import load_dotenv
+        from snowflake.snowpark import Session
+
+        load_dotenv()
+        return Session.builder.configs(
+            {
+                "account": os.environ["SNOWFLAKE_ACCOUNT"],
+                "user": os.environ["SNOWFLAKE_USER"],
+                "password": os.environ.get("SNOWFLAKE_PASSWORD"),
+                "private_key_path": os.environ.get("SNOWFLAKE_PRIVATE_KEY_PATH") or None,
+                "role": os.environ.get("SNOWFLAKE_TRANSFORMER_ROLE", "TRADE_ANALYTICS_TRANSFORMER"),
+                "warehouse": os.environ.get("SNOWFLAKE_WAREHOUSE", "TRADE_ANALYTICS_WH"),
+                "database": os.environ.get("SNOWFLAKE_DATABASE", "TRADE_ANALYTICS"),
+                "schema": os.environ.get("SNOWFLAKE_TRANSFORM_SCHEMA", "GOLD"),
+            }
+        ).create()
 
 
 @st.cache_data(ttl=60)
 def load_data():
-    conn = get_connection()
+    session = get_session()
     # rpt_trade_report is the flat, pre-joined reporting view (models/gold/rpt_trade_report.sql):
     # every filterable attribute is already a plain column, so this dashboard
     # never has to join dim_* tables itself.
-    report = pd.read_sql("SELECT * FROM RPT_TRADE_REPORT", conn)
-    rejected = pd.read_sql(
+    report = session.sql("SELECT * FROM RPT_TRADE_REPORT").to_pandas()
+    rejected = session.sql(
         """
         SELECT reject_reason, count(*) as reject_count
         FROM FCT_REJECTED_TRADES
         GROUP BY reject_reason
         ORDER BY reject_count DESC
-        """,
-        conn,
-    )
+        """
+    ).to_pandas()
     return report, rejected
 
 
