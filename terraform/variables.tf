@@ -39,6 +39,18 @@ variable "transformer_role_name" {
   default = "TRADE_ANALYTICS_TRANSFORMER"
 }
 
+variable "analyst_role_name" {
+  description = "Read-only, masked-data consumer role (reporting views only)."
+  type        = string
+  default     = "TRADE_ANALYTICS_ANALYST"
+}
+
+variable "compliance_role_name" {
+  description = "Read-only, full-fidelity consumer role (all of GOLD, unmasked, including the rejected-trades audit log)."
+  type        = string
+  default     = "TRADE_ANALYTICS_COMPLIANCE"
+}
+
 variable "schemas" {
   description = "Medallion-architecture schemas: BRONZE (raw landing), SILVER (dbt staging + business-rule evaluation), GOLD (marts + Type-2 SCD snapshot)."
   type        = list(string)

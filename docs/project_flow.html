@@ -296,6 +296,13 @@
   <div class="analogy">Like the difference between a report someone has to remember to email out versus a live dashboard on the wall of the trading floor — the second one is just always there.</div>
 </div>
 
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🔒</span><h3>Who Sees What</h3><span class="layer-tag tag-support">supporting</span></div>
+  <p>Two extra Snowflake roles sit on top of the pipeline, read-only: one for compliance staff, who see every trade and the full rejected-trade audit log with real dollar amounts and real counterparty names; and one for general analysts, who see the same reporting screen but with deal sizes rounded to the nearest $1M and counterparty names replaced with a consistent code — enough to spot patterns and totals without seeing exactly who traded exactly how much. The analyst role also can't reach the underlying raw tables at all, only the reporting screen itself, so there's no side door around the masking.</p>
+  <div class="why"><b>Why mask instead of just hiding the columns?</b> Hiding a column entirely would stop an analyst from doing basic aggregate work — "which product line is biggest this quarter" needs some notional figure to sum. Rounding to the nearest million answers that without exposing one counterparty's exact negotiated price on one specific deal.</div>
+  <div class="analogy">Like a company-wide sales report that shows "~$40M" and "Client 7B80959" instead of the exact contract value and the client's actual name — useful for spotting trends, useless for reverse-engineering someone else's deal.</div>
+</div>
+
 <!-- ================= GLOSSARY ================= -->
 <div class="section-title"><div class="num">3</div><h2>Plain-English Glossary</h2></div>
 <table class="glossary">

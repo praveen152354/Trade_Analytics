@@ -122,6 +122,9 @@ def build():
             ["INGEST_FX_RATES_TASK", "Task", "BRONZE", "COPY INTOs new S3 files once daily (configurable). No PURGE -- IAM policy is read-only and it's the user's own bucket."],
             ["DASHBOARD_STAGE", "Stage", "GOLD", "Holds the Streamlit app file(s) -- content PUT here, same pattern as GENERATE_TRADE_FILES."],
             ["TRADE_ANALYTICS_DASHBOARD", "Streamlit app (Streamlit in Snowflake)", "GOLD", "The trade dashboard, running natively in Snowflake on TRADE_ANALYTICS_WH -- no local process. Viewable in Snowsight (Projects -> Streamlit)."],
+            ["TRADE_ANALYTICS_ANALYST", "Role", "—", "Read-only, masked: SELECT on fct_trade_status/rpt_trade_report only (dbt-managed grant)."],
+            ["TRADE_ANALYTICS_COMPLIANCE", "Role", "—", "Read-only, unmasked: SELECT on all of GOLD including fct_rejected_trades (dbt-managed grant)."],
+            ["MASK_NOTIONAL / MASK_COUNTERPARTY", "Masking policy", "GOLD", "dbt-created and dbt-attached (on-run-start hook + post_hook); masks NOTIONAL/NOTIONAL_USD/COUNTERPARTY for any role but TRANSFORMER/COMPLIANCE/ACCOUNTADMIN."],
         ],
         col_widths=[1.7, 1.5, 1.0, 3.2],
     )
@@ -238,6 +241,41 @@ def build():
         col_widths=[3.5, 3.5],
     )
 
+    add_h2(doc, "2b. RBAC & data masking")
+    doc.add_paragraph(
+        "Two read-only consumer roles sit alongside the two service roles "
+        "(LOADER, TRANSFORMER): TRADE_ANALYTICS_COMPLIANCE sees everything "
+        "in GOLD unmasked, including fct_rejected_trades (the audit log) "
+        "and the raw fact/dimension tables. TRADE_ANALYTICS_ANALYST sees "
+        "only fct_trade_status and rpt_trade_report -- not the underlying "
+        "tables -- with COUNTERPARTY pseudonymized and "
+        "NOTIONAL/NOTIONAL_USD rounded to the nearest $1M."
+    )
+    doc.add_paragraph(
+        "The roles themselves are Terraform-managed (terraform/rbac.tf), "
+        "but who can select what is managed by dbt: a +grants config in "
+        "dbt_project.yml grants every GOLD object to COMPLIANCE by "
+        "default, and the two masked models override that individually to "
+        "add ANALYST -- deliberately not granted at the folder level, so "
+        "it can't reach fct_valid_trades directly and read "
+        "NOTIONAL/COUNTERPARTY unmasked. dbt re-applies these grants on "
+        "every run via its native grants model config."
+    )
+    doc.add_paragraph(
+        "Masking is two Snowflake masking policies "
+        "(macros/create_masking_policies.sql, created idempotently via an "
+        "on-run-start hook), each a CASE WHEN CURRENT_ROLE() IN (...) "
+        "expression, attached via a post_hook on both consumer-facing "
+        "views. Verified live by connecting as each role: rpt_trade_report "
+        "returns masked values for ANALYST and real ones for COMPLIANCE, "
+        "and ANALYST is denied on fct_valid_trades directly -- once "
+        "secondary roles are turned off (Snowflake sessions default to "
+        "secondary_roles=ALL, which combines every role granted to a "
+        "user; this trial account's single user holds every role, so "
+        "isolating ANALYST's own privileges for testing needs USE "
+        "SECONDARY ROLES NONE first)."
+    )
+
     doc.add_page_break()
 
     # ---------------------------------------------------------------
@@ -251,6 +289,8 @@ def build():
             ["terraform/*.tf", "IaC for every Snowflake and AWS object listed in section 1, including the Tasks and Alert."],
             ["terraform/backend.tf + bootstrap_state_backend.py", "S3 remote state (shared between local applies and CI) + the one-time script that creates the bucket Terraform can't create for itself."],
             ["terraform/sql/generate_trade_files_procedure.sql", "The one Snowflake object deployed outside Terraform -- see section 1."],
+            ["terraform/rbac.tf", "The two consumer roles (ANALYST, COMPLIANCE) + their schema/warehouse/database grants -- see section 2b."],
+            ["dbt/trade_analytics/macros/create_masking_policies.sql", "Creates the two masking policies (idempotent, on-run-start hook) -- see section 2b."],
             ["dbt/trade_analytics/models/bronze/sources.yml", "Declares BRONZE as a dbt source -- Terraform + the Snowpark procedure own the actual objects."],
             ["dbt/trade_analytics/models/bronze/base_trades_raw.sql, base_fx_rates_raw.sql", "Thin passthrough views -- see section 2."],
             ["dbt/trade_analytics/models/silver/stg_trades.sql", "Consumes the BRONZE stream, flattens VARIANT to columns."],
@@ -261,8 +301,8 @@ def build():
             ["dbt/trade_analytics/models/gold/dim_trader.sql, dim_book.sql, dim_counterparty.sql, dim_product.sql, dim_currency.sql, dim_date.sql", "The six GOLD dimensions -- see section 2a."],
             ["dbt/trade_analytics/models/gold/fct_valid_trades.sql", "Merge-incremental table of current accepted trades, FK'd to every dimension."],
             ["dbt/trade_analytics/models/gold/fct_rejected_trades.sql", "Append-only rejected-trade audit log, FK'd to every dimension. Permanent table."],
-            ["dbt/trade_analytics/models/gold/fct_trade_status.sql", "View computing ACTIVE/EXPIRED status + notional_usd."],
-            ["dbt/trade_analytics/models/gold/rpt_trade_report.sql", "Flat reporting view -- what dashboard/Summary.py queries."],
+            ["dbt/trade_analytics/models/gold/fct_trade_status.sql", "View computing ACTIVE/EXPIRED status + notional_usd. Masked for ANALYST -- see section 2b."],
+            ["dbt/trade_analytics/models/gold/rpt_trade_report.sql", "Flat reporting view -- what dashboard/Summary.py queries. Masked for ANALYST -- see section 2b."],
             ["dbt Cloud (external, not a repo file)", "Hourly job: dbt run then dbt test. Separate monthly job: dbt snapshot. Reads this repo via a read-only deploy key; separate Development and Production environments."],
             ["orchestration/airflow/ (alternative)", "Complete Docker Compose Airflow stack, documented but not the primary orchestration path."],
             ["dashboard/Summary.py + pages/1_Trade_Details.py + common.py + environment.yml", "Multi-page Streamlit report over rpt_trade_report: Summary (KPIs + small charts with dynamic captions) and Trade Details (full table, per-trade Type 2 SCD history, rejected-trades audit). Runs natively in Snowflake (Streamlit in Snowflake, terraform/streamlit.tf) -- no local process; works locally too (streamlit run) via a Snowpark-session fallback, same code either way."],

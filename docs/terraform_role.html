@@ -101,7 +101,7 @@
   <div class="sub">What it manages, exactly what triggers it to run, and — using real moments from building this project, not textbook theory — why it earned its place here.</div>
   <div class="stat-row">
     <div class="stat"><div class="n">2</div><div class="l">Cloud providers managed</div></div>
-    <div class="stat"><div class="n">10</div><div class="l">.tf files</div></div>
+    <div class="stat"><div class="n">11</div><div class="l">.tf files</div></div>
     <div class="stat"><div class="n">30+</div><div class="l">Resources under management</div></div>
     <div class="stat"><div class="n">0</div><div class="l">Manual console clicks</div></div>
   </div>
@@ -124,6 +124,7 @@
 <tr><td>aws.tf</td><td>The AWS side of the FX-rates integration: the S3 bucket (encrypted, public access blocked), the read-only IAM policy, and the IAM role Snowflake assumes to read it.</td></tr>
 <tr><td>s3_integration.tf</td><td>The Snowflake side of that same integration: the storage integration (the trust relationship itself), the external stage pointing at S3, the CSV file format, the landing table, and the daily ingestion Task.</td></tr>
 <tr><td>streamlit.tf</td><td>The trade dashboard as a native Snowflake object: a stage to hold the app file(s), the <code>snowflake_streamlit</code> resource itself (already GA in this provider version, not a preview feature), and a <code>USAGE</code> grant so the transformer role can open it.</td></tr>
+<tr><td>rbac.tf</td><td>Two read-only consumer roles, <code>TRADE_ANALYTICS_ANALYST</code> and <code>TRADE_ANALYTICS_COMPLIANCE</code>, plus the warehouse/database/schema <code>USAGE</code> grants each needs, and a <code>CREATE MASKING POLICY</code> grant on GOLD to the transformer role. Column-level <b>SELECT</b> grants (who can query which GOLD object) and the masking policies themselves (what a masked role actually sees) are dbt's job, not Terraform's — dbt's <code>grants</code> model config and a <code>create_masking_policies()</code> macro, run via an <code>on-run-start</code> hook.</td></tr>
 <tr><td>outputs.tf</td><td>A handful of values (database name, warehouse name, role names) printed after every apply, for quick confirmation without a separate query.</td></tr>
 </table>
 
@@ -136,6 +137,7 @@
       <li><b>dbt Cloud</b> — jobs, environments, and the Snowflake connection on the dbt Cloud side are managed through dbt Cloud's own API, the tool purpose-built for scheduling and running dbt itself.</li>
       <li><b>The BRONZE passthrough views</b> themselves (<code>base_trades_raw</code>, <code>base_fx_rates_raw</code>) and the <code>silver.fx_rates</code> merge-dedup model — these are dbt models, not Terraform resources. Terraform's role stops at granting the transformer role permission to create them (see the <code>CREATE VIEW</code> grant above); dbt owns the SQL.</li>
       <li><b>The Streamlit app's file content</b> (<code>Summary.py</code>, <code>common.py</code>, <code>pages/1_Trade_Details.py</code>, <code>environment.yml</code>) — <code>streamlit.tf</code> registers the app object and the stage it lives on; the files themselves are pushed via a one-time <code>PUT</code>, the same pattern used for <code>GENERATE_TRADE_FILES</code>' Python body — application code stays in application files, not embedded in HCL.</li>
+      <li><b>The masking policies and who can query what</b> (dbt's <code>grants</code> model config, <code>macros/create_masking_policies.sql</code>) — <code>rbac.tf</code> makes the two consumer roles exist and grants the transformer role permission to create masking policies; dbt owns the SELECT grants and the masking logic itself, since both change every time a model's access story changes, not on Terraform's schedule.</li>
     </ul>
   </div>
   <div class="scope-col scope-terraform">

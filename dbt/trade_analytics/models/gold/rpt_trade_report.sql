@@ -1,4 +1,14 @@
-{{ config(materialized='view') }}
+{{
+  config(
+    materialized='view',
+    grants={'select': ['TRADE_ANALYTICS_COMPLIANCE', 'TRADE_ANALYTICS_ANALYST']},
+    post_hook=[
+      "alter view {{ this }} modify column notional set masking policy " ~ target.database ~ ".gold.mask_notional",
+      "alter view {{ this }} modify column notional_usd set masking policy " ~ target.database ~ ".gold.mask_notional",
+      "alter view {{ this }} modify column counterparty set masking policy " ~ target.database ~ ".gold.mask_counterparty",
+    ]
+  )
+}}
 
 -- The flat, report-ready object: one row per currently-valid trade, every
 -- filterable business attribute already denormalized out (no joins needed
@@ -8,6 +18,18 @@
 -- ACTIVE and maturity between two dates" is a single flat WHERE clause.
 -- A view, not a table: cheap to keep current given this project's volume,
 -- and trade_status underneath already recomputes ACTIVE/EXPIRED on read.
+--
+-- RBAC + masking: this is what the dashboard queries, and what
+-- TRADE_ANALYTICS_ANALYST is scoped to -- NOTIONAL/NOTIONAL_USD rounded to
+-- the nearest $1M and COUNTERPARTY pseudonymized for that role, via a
+-- Snowflake masking policy (macros/create_masking_policies.sql).
+-- TRADE_ANALYTICS_COMPLIANCE and TRADE_ANALYTICS_TRANSFORMER see the real
+-- values. Masking is re-applied on every view column here separately from
+-- fct_trade_status: it doesn't automatically propagate through a view
+-- that recomputes a column (notional_usd here is a straight passthrough
+-- of the already-masked upstream value, but Snowflake's masking-policy
+-- propagation through views isn't guaranteed for every column shape, so
+-- this view attaches its own policy rather than relying on it).
 
 select
     s.trade_id,

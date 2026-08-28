@@ -110,6 +110,53 @@ and a `Session.builder` fallback builds an equivalent Snowpark session from
 `.env` instead — every query after that point is identical
 `session.sql(...).to_pandas()` code either way.
 
+### RBAC & data masking
+
+Two read-only consumer roles sit alongside the two service roles (LOADER,
+TRANSFORMER):
+
+| Role | Sees | Masking |
+|---|---|---|
+| `TRADE_ANALYTICS_TRANSFORMER` | Everything in SILVER/GOLD (dbt's own build role) | None |
+| `TRADE_ANALYTICS_COMPLIANCE` | Everything in GOLD, including `fct_rejected_trades` (the audit log) and the raw fact/dimension tables | None -- full fidelity |
+| `TRADE_ANALYTICS_ANALYST` | Only `fct_trade_status` and `rpt_trade_report` -- not the underlying tables | `COUNTERPARTY` pseudonymized, `NOTIONAL`/`NOTIONAL_USD` rounded to the nearest \$1M |
+
+Roles themselves are Terraform-managed (`terraform/rbac.tf`), but **who can
+select what** is managed by dbt, not Terraform: a `+grants` config in
+`dbt_project.yml` (`gold: +grants: select: ['TRADE_ANALYTICS_COMPLIANCE']`)
+grants every GOLD object to COMPLIANCE by default, and the two masked
+models override that individually
+(`grants={'select': ['TRADE_ANALYTICS_COMPLIANCE', 'TRADE_ANALYTICS_ANALYST']}`
+in their `config()`) to add ANALYST — deliberately *not* granted at the
+folder level, so it can't reach `fct_valid_trades` directly and read
+`NOTIONAL`/`COUNTERPARTY` unmasked. dbt re-applies (and would revoke, if a
+model's `grants` config changed) these grants on every run — this is a
+native dbt feature (`grants` model config), not a workaround.
+
+Masking itself is two Snowflake masking policies
+(`macros/create_masking_policies.sql`, created idempotently via an
+`on-run-start` hook so they exist before any model tries to attach one),
+each a `CASE WHEN CURRENT_ROLE() IN (...)` expression, attached to
+`NOTIONAL`/`NOTIONAL_USD`/`COUNTERPARTY` on both `fct_trade_status` and
+`rpt_trade_report` via a `post_hook` in each model's `config()`. Rounding
+notional to the nearest \$1M (rather than nulling it) lets ANALYST still
+see rough exposure size and run aggregate analysis; pseudonymizing
+counterparty with a deterministic hash (rather than a single generic
+label) lets it still group and count by counterparty without learning
+which one it actually is.
+
+Verified live by connecting as each role: `rpt_trade_report` returns
+masked values for ANALYST and real ones for COMPLIANCE, and ANALYST is
+denied on `fct_valid_trades` directly (`Object 'FCT_VALID_TRADES' does not
+exist or not authorized`) — but only once secondary roles are turned off.
+Snowflake sessions default to `secondary_roles = ALL`, which combines
+every role granted to a user regardless of which one is "current" — this
+project's roles are all granted to the same trial-account user (there's
+only one person here), so testing ANALYST's restriction from that same
+login needs `USE SECONDARY ROLES NONE;` first, or COMPLIANCE's broader
+grants silently paper over it. A real deployment would have each role
+belong to a different person's login, where this wouldn't come up.
+
 dbt's own folder convention (`models/bronze/`, `models/silver/`,
 `models/gold/`) matches the physical schemas 1:1 in this project, though
 that's a project choice, not a dbt requirement — see the comment at the top

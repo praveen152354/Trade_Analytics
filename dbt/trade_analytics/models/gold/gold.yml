@@ -173,7 +173,10 @@ models:
   - name: fct_trade_status
     description: >
       fct_valid_trades with a dynamically computed ACTIVE/EXPIRED status and
-      notional_usd (via the convert_to_usd macro).
+      notional_usd (via the convert_to_usd macro). One of two GOLD objects
+      (with rpt_trade_report) granted to TRADE_ANALYTICS_ANALYST, with
+      NOTIONAL/NOTIONAL_USD/COUNTERPARTY masked for that role via a
+      Snowflake masking policy (see macros/create_masking_policies.sql).
     columns:
       - name: trade_id
         data_tests:
@@ -198,7 +201,9 @@ models:
       Flat reporting view: fct_trade_status with every filterable attribute
       already denormalized (trader/book/counterparty/product/currency as
       text, trade/maturity year-quarter-month, days_to_maturity). What the
-      dashboard and any downstream reporting/BI tool should query.
+      dashboard and any downstream reporting/BI tool should query. Granted
+      to both TRADE_ANALYTICS_COMPLIANCE (unmasked) and
+      TRADE_ANALYTICS_ANALYST (NOTIONAL/NOTIONAL_USD/COUNTERPARTY masked).
     columns:
       - name: trade_id
         data_tests:

@@ -15,10 +15,27 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
+# Creates (idempotently) the Snowflake masking policies applied to
+# fct_trade_status / rpt_trade_report -- see macros/create_masking_policies.sql
+# and the `grants`/post_hook config on those two models. Runs before every
+# dbt invocation so the policies always exist before a post-hook tries to
+# attach one.
+on-run-start:
+  - "{{ create_masking_policies() }}"
+
 # Medallion architecture: BRONZE (raw landing) -> SILVER (staging +
 # business-rule evaluation) -> GOLD (marts + Type-2 SCD snapshot). Folder names
 # below are dbt's own organizational convention and don't have to match the
 # physical schema names they materialize into (they do here, on purpose).
+#
+# RBAC: `grants` here is the default for every GOLD object -- read-only to
+# TRADE_ANALYTICS_COMPLIANCE (full-fidelity: raw facts, dimensions, the
+# rejected-trades audit log). TRADE_ANALYTICS_ANALYST is deliberately NOT
+# granted here -- it's added only on fct_trade_status and rpt_trade_report
+# (see those models' config), the two objects the masking policies are
+# actually attached to. Granting it broadly here would let it query
+# fct_valid_trades directly and read NOTIONAL/COUNTERPARTY unmasked,
+# defeating the point.
 models:
   trade_analytics:
     bronze:
@@ -29,10 +46,14 @@ models:
       +schema: silver
     gold:
       +schema: gold
+      +grants:
+        select: ["TRADE_ANALYTICS_COMPLIANCE"]
 
 snapshots:
   trade_analytics:
     +schema: gold
+    +grants:
+      select: ["TRADE_ANALYTICS_COMPLIANCE"]
 
 vars:
   # Earliest timestamp used to seed incremental watermark comparisons.
