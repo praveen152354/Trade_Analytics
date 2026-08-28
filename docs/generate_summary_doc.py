@@ -303,7 +303,7 @@ def build():
             ["dbt/trade_analytics/models/gold/fct_rejected_trades.sql", "Append-only rejected-trade audit log, FK'd to every dimension. Permanent table."],
             ["dbt/trade_analytics/models/gold/fct_trade_status.sql", "View computing ACTIVE/EXPIRED status + notional_usd. Masked for ANALYST -- see section 2b."],
             ["dbt/trade_analytics/models/gold/rpt_trade_report.sql", "Flat reporting view -- what dashboard/Summary.py queries. Masked for ANALYST -- see section 2b."],
-            ["dbt Cloud (external, not a repo file)", "Hourly job: dbt run then dbt test. Separate monthly job: dbt snapshot. Reads this repo via a read-only deploy key; separate Development and Production environments."],
+            ["dbt Cloud (external, not a repo file)", "Hourly job: dbt run then dbt test. Separate monthly job: dbt snapshot. Reads/writes this repo via a deploy key (read-write, so the dbt Cloud IDE can branch/commit/push); separate Development and Production environments."],
             ["orchestration/airflow/ (alternative)", "Complete Docker Compose Airflow stack, documented but not the primary orchestration path."],
             ["dashboard/Summary.py + pages/1_Trade_Details.py + common.py + environment.yml", "Multi-page Streamlit report over rpt_trade_report: Summary (KPIs + small charts with dynamic captions) and Trade Details (full table, per-trade Type 2 SCD history, rejected-trades audit). Runs natively in Snowflake (Streamlit in Snowflake, terraform/streamlit.tf) -- no local process; works locally too (streamlit run) via a Snowpark-session fallback, same code either way."],
             ["snowflake_sql/observability_toolkit.sql", "Ready-to-run debugging, time-travel, optimization and monitoring queries."],

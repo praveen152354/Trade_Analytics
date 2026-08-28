@@ -270,8 +270,10 @@ needs no manual cleanup.
   rather than as a `snowflake_procedure_python` resource, so its Python
   body stays under direct version control, reviewable in one file.
 - **Transformation**: dbt run/test is scheduled hourly, and the Type 2 SCD
-  snapshot monthly, through dbt Cloud jobs (project reads this repo
-  directly via a read-only deploy key) — not through Snowflake Tasks;
+  snapshot monthly, through dbt Cloud jobs (project reads this repo via a
+  deploy key — read-write, so the dbt Cloud IDE can also branch/commit/push
+  directly; a read-only key blocks that even though scheduled jobs never
+  need write access) — not through Snowflake Tasks;
   `EXECUTE DBT PROJECT` (dbt Projects on Snowflake) is a newer,
   still-evolving feature, and dbt Cloud's own scheduler gives
   retries/logs/alerting for free without adding a dependency on it.
