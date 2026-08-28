@@ -111,15 +111,15 @@ def build():
             ["TRADES_RAW", "Table", "BRONZE", "Insert-only landing table (raw_payload VARIANT, file_name, loaded_at). Permanent, cluster_by=to_date(loaded_at)."],
             ["TRADES_RAW_STREAM", "Stream", "BRONZE", "CDC stream on TRADES_RAW; consumed by dbt's stg_trades model."],
             ["GENERATE_TRADE_FILES", "Procedure (Snowpark Python)", "BRONZE", "Generates a mock trade batch, writes it as .jsonl straight to the stage."],
-            ["GENERATE_TRADE_FILES_TASK", "Task", "BRONZE", "Calls the procedure every 2 min (configurable). Auto-retries 2x on failure."],
-            ["INGEST_TRADES_TASK", "Task", "BRONZE", "COPY INTOs new stage files every 5 min (configurable). Independent schedule from generation."],
+            ["GENERATE_TRADE_FILES_TASK", "Task", "BRONZE", "Calls the procedure every 2 min (configurable). Auto-retries 2x on failure. Currently suspended (cost) -- see snowflake_sql/task_control.sql."],
+            ["INGEST_TRADES_TASK", "Task", "BRONZE", "COPY INTOs new stage files every 5 min (configurable). Independent schedule from generation. Currently suspended (cost)."],
             ["TRADE_PIPELINE_ALERT", "Email notification integration", "—", "Lets Snowflake send email for the alert below."],
-            ["TASK_FAILURE_ALERT", "Alert", "BRONZE", "Every 15 min, emails if any of the three tasks failed in TASK_HISTORY."],
+            ["TASK_FAILURE_ALERT", "Alert", "BRONZE", "Every 15 min, emails if any of the three tasks failed in TASK_HISTORY. Currently suspended alongside the tasks it watches."],
             ["FX_RATES_S3_INTEGRATION", "Storage integration", "—", "IAM role trust to S3 -- no long-lived AWS key stored in Snowflake."],
             ["FX_RATES_STAGE", "External stage (S3)", "BRONZE", "Points at s3://<bucket>/fx_rates/ -- manually-uploaded daily rate CSVs land here."],
             ["FX_RATES_CSV_FORMAT", "File format", "BRONZE", "CSV, skip_header=1."],
             ["FX_RATES_RAW", "Table", "BRONZE", "Append-only landing table for daily FX rates (as_of_date, currency, rate_to_usd)."],
-            ["INGEST_FX_RATES_TASK", "Task", "BRONZE", "COPY INTOs new S3 files once daily (configurable). No PURGE -- IAM policy is read-only and it's the user's own bucket."],
+            ["INGEST_FX_RATES_TASK", "Task", "BRONZE", "COPY INTOs new S3 files once daily (configurable). No PURGE -- IAM policy is read-only and it's the user's own bucket. Currently suspended (cost)."],
             ["DASHBOARD_STAGE", "Stage", "GOLD", "Holds the Streamlit app file(s) -- content PUT here, same pattern as GENERATE_TRADE_FILES."],
             ["TRADE_ANALYTICS_DASHBOARD", "Streamlit app (Streamlit in Snowflake)", "GOLD", "The trade dashboard, running natively in Snowflake on TRADE_ANALYTICS_WH -- no local process. Viewable in Snowsight (Projects -> Streamlit)."],
             ["TRADE_ANALYTICS_ANALYST", "Role", "—", "Read-only, masked: SELECT on fct_trade_status/rpt_trade_report only (dbt-managed grant)."],
@@ -149,6 +149,23 @@ def build():
         "TRADES_STAGE only. A Task's own ERROR_INTEGRATION property only accepts "
         "cloud-messaging integrations (SNS/Pub-Sub/Event Grid), not EMAIL, which "
         "is why failure alerting goes through a separate ALERT object instead."
+    )
+
+    doc.add_paragraph(
+        "Orchestration is split deliberately across two systems rather than "
+        "having one do everything: Snowflake Tasks handle ingestion "
+        "(generation and COPY INTO, on independent minute-level schedules, "
+        "matching the case study's 'Ingestion: Snowflake Native' guidance), "
+        "and dbt Cloud handles transformation (run/test hourly, snapshot "
+        "monthly). dbt Cloud could technically run ingestion too via "
+        "dbt run-operation, but that would collapse the two tasks' "
+        "independent cadences into dbt Cloud's hourly schedule and use a "
+        "transformation tool to run non-dbt SQL -- not done, on purpose. "
+        "All three ingestion Tasks and the failure alert are currently "
+        "suspended (a deliberate, reversible cost decision on a trial "
+        "account) -- dbt Cloud's own jobs are unaffected and keep running "
+        "on schedule regardless, since they just read whatever is already "
+        "in BRONZE.TRADES_RAW."
     )
 
     doc.add_page_break()

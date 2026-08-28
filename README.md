@@ -261,6 +261,9 @@ needs no manual cleanup.
 
 ## Orchestration
 
+Split deliberately across two orchestrators, each doing what it's built
+for, rather than one tool doing everything:
+
 - **Ingestion** (Snowflake-native): two `snowflake_task` resources in
   `terraform/orchestration.tf`, each with `task_auto_retry_attempts = 2` and
   `suspend_task_after_num_failures = 3`. A `snowflake_alert` checks
@@ -282,6 +285,27 @@ needs no manual cleanup.
   as one DAG. It's kept as a documented alternative (the case study's
   preferred stack lists Airflow explicitly) but isn't the path this repo
   runs day to day.
+
+**Why not have dbt Cloud orchestrate ingestion too** (it technically could,
+via `dbt run-operation` calling a macro that issues the `CALL
+GENERATE_TRADE_FILES` / `COPY INTO`)? Two reasons this wasn't done: the two
+ingestion Tasks run on independent, minute-level schedules (generation
+every 2 min, ingestion every 5 min) specifically to simulate a continuous
+upstream feed decoupled from ingestion cadence — collapsing that into dbt
+Cloud's hourly job would mean trades only "arrive" once an hour, losing
+that realism. And the case study brief itself lists `Ingestion: Snowflake
+Native` as a separate line from orchestration — Tasks are the expected fit
+there, not a transformation tool pressed into running non-dbt SQL.
+
+**Current live status**: all three Tasks (`GENERATE_TRADE_FILES_TASK`,
+`INGEST_TRADES_TASK`, `INGEST_FX_RATES_TASK`) and `TASK_FAILURE_ALERT` are
+suspended — a deliberate, easily-reversible cost decision on a trial
+account, not a failure. `snowflake_sql/task_control.sql` has the exact
+resume commands; `terraform apply` after flipping `started`/`enabled` to
+`true` in the `.tf` files works too. dbt Cloud's jobs are unaffected and
+run on their normal schedule regardless (hourly `run`+`test`, monthly
+`snapshot`) — dbt Cloud reads whatever's already in `BRONZE.TRADES_RAW`,
+it doesn't depend on the ingestion Tasks being active.
 
 See [docs/SCALABILITY.md](docs/SCALABILITY.md) for the Snowflake
 `ACCOUNT_USAGE`/`TASK_HISTORY` queries used for pipeline health monitoring
