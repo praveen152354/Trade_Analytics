@@ -20,7 +20,7 @@ resource "snowflake_streamlit" "dashboard" {
   stage           = snowflake_stage.dashboard_stage.fully_qualified_name
   main_file       = "streamlit_app.py"
   query_warehouse = snowflake_warehouse.trade_analytics_wh.name
-  title           = "Trade Analytics — Pipeline Overview"
+  title           = "Trade Analytics"
   comment         = "Filterable trade report + rejection breakdown, reading rpt_trade_report / fct_rejected_trades. Source: dashboard/streamlit_app.py."
 
   depends_on = [snowflake_stage.dashboard_stage]

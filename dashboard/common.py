@@ -126,6 +126,20 @@ def render_filters(report_df: pd.DataFrame) -> pd.DataFrame:
         "Trade status", ["ACTIVE", "EXPIRED"], key="flt_status"
     )
 
+    min_trade_date, max_trade_date = report_df["TRADE_DATE"].min(), report_df["TRADE_DATE"].max()
+    trade_date_range = st.sidebar.date_input(
+        "Trade (booking) date range",
+        value=st.session_state.get("flt_trade_date", (min_trade_date, max_trade_date)),
+        min_value=min_trade_date,
+        max_value=max_trade_date,
+        key="flt_trade_date",
+    )
+
+    # Note: this can never start earlier than today -- rule 3 rejects any
+    # trade with an already-past maturity_date at submission, so no
+    # currently-valid trade can have a maturity before today regardless of
+    # how far in the past it was booked (see the "Trade (booking) date
+    # range" filter above for that).
     min_date, max_date = report_df["MATURITY_DATE"].min(), report_df["MATURITY_DATE"].max()
     maturity_range = st.sidebar.date_input(
         "Maturity date range",
@@ -148,6 +162,12 @@ def render_filters(report_df: pd.DataFrame) -> pd.DataFrame:
         filtered = filtered[filtered["CURRENCY"].isin(currency_filter)]
     if status_filter:
         filtered = filtered[filtered["TRADE_STATUS"].isin(status_filter)]
+    if isinstance(trade_date_range, tuple) and len(trade_date_range) == 2:
+        start, end = trade_date_range
+        filtered = filtered[
+            (filtered["TRADE_DATE"] >= pd.Timestamp(start))
+            & (filtered["TRADE_DATE"] <= pd.Timestamp(end))
+        ]
     if isinstance(maturity_range, tuple) and len(maturity_range) == 2:
         start, end = maturity_range
         filtered = filtered[
