@@ -56,6 +56,14 @@ def load_data():
     # every filterable attribute is already a plain column, so this dashboard
     # never has to join dim_* tables itself.
     report = session.sql("SELECT * FROM RPT_TRADE_REPORT").to_pandas()
+    # Snowpark's to_pandas() returns Snowflake DATE columns as plain
+    # datetime.date objects (object dtype), not pandas Timestamp/datetime64
+    # -- unlike a DB-API connector's read_sql, which returns datetime64
+    # directly. Normalizing here means every comparison below (pd.Timestamp,
+    # st.date_input's date objects) works the same regardless of which
+    # session path (native SiS vs. local Snowpark fallback) loaded the data.
+    report["TRADE_DATE"] = pd.to_datetime(report["TRADE_DATE"])
+    report["MATURITY_DATE"] = pd.to_datetime(report["MATURITY_DATE"])
     rejected = session.sql(
         """
         SELECT reject_reason, count(*) as reject_count
