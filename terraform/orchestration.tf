@@ -84,7 +84,7 @@ resource "snowflake_alert" "task_failure_alert" {
   schema    = "BRONZE"
   name      = "TASK_FAILURE_ALERT"
   warehouse = snowflake_warehouse.trade_analytics_wh.name
-  enabled   = true
+  enabled   = false # intentionally suspended alongside the tasks it watches (cost) — see snowflake_sql/task_control.sql to resume
   comment   = "Emails alert_email if any pipeline task failed in the last 15 minutes."
 
   alert_schedule {
