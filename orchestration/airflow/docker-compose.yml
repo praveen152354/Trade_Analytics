@@ -1,0 +1,107 @@
+x-airflow-common: &airflow-common
+  build:
+    context: ../../
+    dockerfile: orchestration/airflow/Dockerfile
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DEFAULT_TIMEZONE: utc
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+
+    # Email alerting on task/DAG failure (rule: "basic alerting e.g. email on pipeline failure").
+    AIRFLOW__EMAIL__EMAIL_BACKEND: airflow.utils.email.send_email_smtp
+    AIRFLOW__SMTP__SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+    AIRFLOW__SMTP__SMTP_PORT: ${SMTP_PORT:-587}
+    AIRFLOW__SMTP__SMTP_STARTTLS: "true"
+    AIRFLOW__SMTP__SMTP_SSL: "false"
+    AIRFLOW__SMTP__SMTP_USER: ${SMTP_USER:-}
+    AIRFLOW__SMTP__SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    AIRFLOW__SMTP__SMTP_MAIL_FROM: ${SMTP_MAIL_FROM:-}
+    ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+
+    # Snowflake credentials, read by the DAG's PythonOperators and by dbt's profiles.yml.
+    SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT:-}
+    SNOWFLAKE_USER: ${SNOWFLAKE_USER:-}
+    SNOWFLAKE_PASSWORD: ${SNOWFLAKE_PASSWORD:-}
+    SNOWFLAKE_ROLE: ${SNOWFLAKE_ROLE:-TRADE_ANALYTICS_LOADER}
+    SNOWFLAKE_TRANSFORMER_ROLE: ${SNOWFLAKE_TRANSFORMER_ROLE:-TRADE_ANALYTICS_TRANSFORMER}
+    SNOWFLAKE_DATABASE: ${SNOWFLAKE_DATABASE:-TRADE_ANALYTICS}
+    SNOWFLAKE_WAREHOUSE: ${SNOWFLAKE_WAREHOUSE:-TRADE_ANALYTICS_WH}
+    SNOWFLAKE_RAW_SCHEMA: ${SNOWFLAKE_RAW_SCHEMA:-BRONZE}
+    SNOWFLAKE_TRANSFORM_SCHEMA: ${SNOWFLAKE_TRANSFORM_SCHEMA:-GOLD}
+    DBT_PROFILES_DIR: /opt/airflow/project/dbt/trade_analytics
+  volumes:
+    - ../../:/opt/airflow/project
+    - ./dags:/opt/airflow/dags
+    - airflow-logs:/opt/airflow/logs
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on: &airflow-common-depends-on
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+    restart: unless-stopped
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --username "${AIRFLOW_ADMIN_USER:-admin}" \
+          --password "${AIRFLOW_ADMIN_PASSWORD:-admin}" \
+          --firstname Trade \
+          --lastname Analytics \
+          --role Admin \
+          --email "${ALERT_EMAIL_TO:-admin@example.com}" || true
+    depends_on:
+      <<: *airflow-common-depends-on
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-db-volume:
+  airflow-logs:

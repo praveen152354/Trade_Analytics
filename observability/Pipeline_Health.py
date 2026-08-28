@@ -1,16 +1,17 @@
 """
-Trade Analytics dashboard -- Pipeline Health page.
+Pipeline Health -- a standalone Streamlit in Snowflake app, separate from
+the Trade Analytics dashboard (dashboard/Summary.py + pages/).
 
 The "one place to see the whole pipeline end-to-end" view: live status for
 every ingestion Task, the CDC stream, the failure alert, and a data-
 freshness signal for the transform layer -- plus resume/suspend controls
-for the ingestion Tasks and alert, right from the page. Replaces the value
-an external orchestrator's UI would have given (see README's
-"Orchestration" section for why a separate Airflow instance was built,
-considered, and removed instead of kept for this).
+for the ingestion Tasks and alert, right from the page. Kept as its own
+app (terraform/pipeline_health.tf) rather than a third page on the
+business-reporting dashboard: this is an operational/observability tool,
+a different audience and a different concern from rpt_trade_report.
 
-Status logic lives in observability/pipeline_status.py, not here -- this
-file is presentation only.
+Status logic lives in pipeline_status.py (same observability/ folder,
+uploaded alongside this file) -- this file is presentation only.
 """
 
 from datetime import datetime, timezone
@@ -28,7 +29,7 @@ from pipeline_status import (
     suspend_task,
 )
 
-st.set_page_config(page_title="Trade Analytics — Pipeline Health", layout="wide")
+st.set_page_config(page_title="Pipeline Health", layout="wide")
 st.header("Trade Analytics — Pipeline Health")
 st.caption(
     "Live status across the whole pipeline, Snowflake Tasks through the transform "

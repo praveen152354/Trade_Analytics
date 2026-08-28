@@ -1,0 +1,11 @@
+# Read automatically by Streamlit in Snowflake from the same stage location
+# as Pipeline_Health.py. Every package here must be available in
+# Snowflake's Anaconda channel -- pip packages aren't installable inside
+# SiS's sandboxed runtime. No plotly here (unlike dashboard/environment.yml):
+# this app has no charts, just status text/metrics and an HTML flow diagram.
+name: app_environment
+channels:
+  - snowflake
+dependencies:
+  - streamlit
+  - pandas

@@ -68,7 +68,7 @@ resource "snowflake_task" "ingest_fx_rates_task" {
   schema    = "BRONZE"
   name      = "INGEST_FX_RATES_TASK"
   warehouse = snowflake_warehouse.trade_analytics_wh.name
-  started   = false # intentionally suspended for now (cost), same as the other two tasks — flip to true + apply, or see snowflake_sql/task_control.sql, to resume
+  started   = false # intentionally suspended for now (cost), same as the other two tasks — flip to true + apply, or see observability/task_control.sql, to resume
   comment   = "Once-daily COPY INTO from the S3 external stage — picks up whatever CSV(s) were manually uploaded to fx_rates/ since the last run."
 
   schedule {

@@ -103,7 +103,9 @@ creates:
   each is independent) rather than one Task doing everything, and consider
   moving dbt scheduling from a single hourly dbt Cloud job to
   multiple jobs partitioned by model selector so a slow mart doesn't delay
-  a fast one.
+  a fast one. The `orchestration/airflow/` alternative would scale via
+  `max_active_runs`/task-level parallelism and `CeleryExecutor`/
+  `KubernetesExecutor` if that path were adopted instead.
 - **dbt**: models are already incremental (not full-refresh), so dbt's own
   cost scales with the size of each new batch, not total historical volume
   — the main lever at 10,000x is warehouse size/concurrency above, not

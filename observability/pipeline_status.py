@@ -1,23 +1,50 @@
 """
-Live pipeline health checks + task controls for the Pipeline Health
-dashboard page (dashboard/pages/2_Pipeline_Health.py).
+Live pipeline health checks + task controls for the standalone Pipeline
+Health app (observability/Pipeline_Health.py).
 
-Uploaded flat onto DASHBOARD_STAGE alongside common.py/Summary.py -- see
-data_generator/../scratchpad upload script -- so it's importable there as
-`from pipeline_status import ...`, the same pattern as `from common import
-...`. Lives in its own observability/ folder in the repo (not dashboard/)
-since it's a distinct concern: read-only status + operational controls
-over the ingestion layer, not report rendering.
+Uploaded flat alongside Pipeline_Health.py onto its own stage (see
+terraform/pipeline_health.tf) -- importable there as
+`from pipeline_status import ...`. Deliberately self-contained (its own
+get_session(), not dashboard/common.py's) since Pipeline Health is a
+separate Streamlit app on a separate stage -- dashboard/common.py isn't
+uploaded there and importing across apps isn't a thing SiS supports.
 
-Every function here reuses common.get_session() rather than opening its
-own connection, so it works identically inside Streamlit in Snowflake and
-via the local Snowpark-session fallback.
+Every function here goes through get_session() (below), so it works
+identically inside Streamlit in Snowflake and via the local Snowpark-
+session fallback -- same dual-mode pattern as dashboard/common.py, just
+duplicated rather than shared across the two independent apps.
 """
+
+import os
 
 import pandas as pd
 import streamlit as st
 
-from common import get_session
+
+@st.cache_resource
+def get_session():
+    try:
+        from snowflake.snowpark.context import get_active_session
+
+        return get_active_session()
+    except Exception:
+        from dotenv import load_dotenv
+        from snowflake.snowpark import Session
+
+        load_dotenv()
+        return Session.builder.configs(
+            {
+                "account": os.environ["SNOWFLAKE_ACCOUNT"],
+                "user": os.environ["SNOWFLAKE_USER"],
+                "password": os.environ.get("SNOWFLAKE_PASSWORD"),
+                "private_key_path": os.environ.get("SNOWFLAKE_PRIVATE_KEY_PATH") or None,
+                "role": os.environ.get("SNOWFLAKE_TRANSFORMER_ROLE", "TRADE_ANALYTICS_TRANSFORMER"),
+                "warehouse": os.environ.get("SNOWFLAKE_WAREHOUSE", "TRADE_ANALYTICS_WH"),
+                "database": os.environ.get("SNOWFLAKE_DATABASE", "TRADE_ANALYTICS"),
+                "schema": os.environ.get("SNOWFLAKE_TRANSFORM_SCHEMA", "GOLD"),
+            }
+        ).create()
+
 
 # Every object this page watches/controls, and which schema it lives in.
 TASKS = ["GENERATE_TRADE_FILES_TASK", "INGEST_TRADES_TASK", "INGEST_FX_RATES_TASK"]

@@ -4,10 +4,19 @@
     unique_key=['as_of_date', 'currency'],
     incremental_strategy='merge',
     on_schema_change='append_new_columns',
-    transient=true
+    transient=true,
+    grants={'select': ['ACCOUNTADMIN']}
   )
 }}
 
+-- grants={'select': ['ACCOUNTADMIN']}: the Pipeline Health app (which runs
+-- with ACCOUNTADMIN's rights, since a Streamlit app runs as its owner, not
+-- the viewer) reads this table for the transform-freshness signal. Without
+-- this, the same "Insufficient privileges... owner role ACCOUNTADMIN must
+-- have SELECT granted" failure that hit GOLD earlier would hit this SILVER
+-- table too -- caught live and fixed here rather than by a broader,
+-- non-dbt-managed grant that would just get fought over again.
+--
 -- Deduplicates BRONZE.FX_RATES_RAW down to one row per (as_of_date, currency):
 -- the most recently loaded value. BRONZE is deliberately left untouched and
 -- append-only -- every file ever loaded is recorded there, even when a file

@@ -119,12 +119,14 @@ ask.
   the rules are all set-based (version comparison, date comparison), which
   Snowflake's query engine does far more efficiently at scale than
   row-by-row Python, and dbt gives us tests, docs, and lineage for free.
-- **Snowflake Tasks for ingestion, dbt Cloud for transformation** rather
-  than a single external orchestrator (Airflow was built and considered,
-  then removed — see the README's "Orchestration" section for why): each
-  tool orchestrates the part it's actually built for, and both give
-  retries/alerting/history out of the box without an extra system to run
-  and maintain.
+- **Snowflake Tasks for ingestion, dbt Cloud for transformation** as the
+  primary path: each tool orchestrates the part it's actually built for,
+  with retries/alerting/history out of the box, no extra system to run.
+  **Airflow (Docker Compose)** is kept as a genuine, working alternative
+  (`orchestration/airflow/`) — matches the brief's preferred stack, gives
+  DAG-level retries/alerting/history out of the box, and is a common
+  reference pattern for running this whole project end-to-end from a
+  single local machine against the same cloud Snowflake account.
 - **Terraform (`snowflakedb/snowflake` provider)** for IaC: the warehouse,
   database/schemas, roles, stage, file format, raw table and stream are all
   declared once and reproducible; nothing in this project was clicked into

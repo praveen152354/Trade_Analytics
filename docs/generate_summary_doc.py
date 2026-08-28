@@ -78,7 +78,7 @@ def build():
     style.font.size = Pt(10.5)
 
     add_title(doc, "Trade Analytics — Provisioned Objects & Scripts")
-    add_subtitle(doc, "Data Engineering Case Study — Snowflake + dbt + Terraform")
+    add_subtitle(doc, "Data Engineering Case Study — Snowflake + dbt + Airflow + Terraform")
     doc.add_paragraph()
 
     # ---------------------------------------------------------------
@@ -111,7 +111,7 @@ def build():
             ["TRADES_RAW", "Table", "BRONZE", "Insert-only landing table (raw_payload VARIANT, file_name, loaded_at). Permanent, cluster_by=to_date(loaded_at)."],
             ["TRADES_RAW_STREAM", "Stream", "BRONZE", "CDC stream on TRADES_RAW; consumed by dbt's stg_trades model."],
             ["GENERATE_TRADE_FILES", "Procedure (Snowpark Python)", "BRONZE", "Generates a mock trade batch, writes it as .jsonl straight to the stage."],
-            ["GENERATE_TRADE_FILES_TASK", "Task", "BRONZE", "Calls the procedure every 2 min (configurable). Auto-retries 2x on failure. Currently suspended (cost) -- see snowflake_sql/task_control.sql."],
+            ["GENERATE_TRADE_FILES_TASK", "Task", "BRONZE", "Calls the procedure every 2 min (configurable). Auto-retries 2x on failure. Currently suspended (cost) -- see observability/task_control.sql."],
             ["INGEST_TRADES_TASK", "Task", "BRONZE", "COPY INTOs new stage files every 5 min (configurable). Independent schedule from generation. Currently suspended (cost)."],
             ["TRADE_PIPELINE_ALERT", "Email notification integration", "—", "Lets Snowflake send email for the alert below."],
             ["TASK_FAILURE_ALERT", "Alert", "BRONZE", "Every 15 min, emails if any of the three tasks failed in TASK_HISTORY. Currently suspended alongside the tasks it watches."],
@@ -120,8 +120,10 @@ def build():
             ["FX_RATES_CSV_FORMAT", "File format", "BRONZE", "CSV, skip_header=1."],
             ["FX_RATES_RAW", "Table", "BRONZE", "Append-only landing table for daily FX rates (as_of_date, currency, rate_to_usd)."],
             ["INGEST_FX_RATES_TASK", "Task", "BRONZE", "COPY INTOs new S3 files once daily (configurable). No PURGE -- IAM policy is read-only and it's the user's own bucket. Currently suspended (cost)."],
-            ["DASHBOARD_STAGE", "Stage", "GOLD", "Holds the Streamlit app file(s) -- content PUT here, same pattern as GENERATE_TRADE_FILES."],
+            ["DASHBOARD_STAGE", "Stage", "GOLD", "Holds the Trade Analytics app file(s) -- content PUT here, same pattern as GENERATE_TRADE_FILES."],
             ["TRADE_ANALYTICS_DASHBOARD", "Streamlit app (Streamlit in Snowflake)", "GOLD", "The trade dashboard, running natively in Snowflake on TRADE_ANALYTICS_WH -- no local process. Viewable in Snowsight (Projects -> Streamlit)."],
+            ["PIPELINE_HEALTH_STAGE", "Stage", "GOLD", "Holds the separate Pipeline Health app file(s) -- content PUT here, same pattern as GENERATE_TRADE_FILES."],
+            ["PIPELINE_HEALTH", "Streamlit app (Streamlit in Snowflake)", "GOLD", "Live pipeline status + task resume/suspend controls, a separate app from the dashboard, running on TRADE_ANALYTICS_WH."],
             ["TRADE_ANALYTICS_ANALYST", "Role", "—", "Read-only, masked: SELECT on fct_trade_status/rpt_trade_report only (dbt-managed grant)."],
             ["TRADE_ANALYTICS_COMPLIANCE", "Role", "—", "Read-only, unmasked: SELECT on all of GOLD including fct_rejected_trades (dbt-managed grant)."],
             ["MASK_NOTIONAL / MASK_COUNTERPARTY", "Masking policy", "GOLD", "dbt-created and dbt-attached (on-run-start hook + post_hook); masks NOTIONAL/NOTIONAL_USD/COUNTERPARTY for any role but TRANSFORMER/COMPLIANCE/ACCOUNTADMIN."],
@@ -238,7 +240,7 @@ def build():
         "to_date(loaded_at) respectively -- illustrative at this project's "
         "row count, but aimed at the exact query pattern rpt_trade_report's "
         "dashboard filter uses (a maturity-date range). "
-        "snowflake_sql/observability_toolkit.sql checks clustering health "
+        "observability/observability_toolkit.sql checks clustering health "
         "via SYSTEM$CLUSTERING_INFORMATION() and demonstrates a TEMPORARY "
         "table for session-scoped ad-hoc debugging that needs no manual "
         "cleanup."
@@ -307,6 +309,7 @@ def build():
             ["terraform/backend.tf + bootstrap_state_backend.py", "S3 remote state (shared between local applies and CI) + the one-time script that creates the bucket Terraform can't create for itself."],
             ["terraform/sql/generate_trade_files_procedure.sql", "The one Snowflake object deployed outside Terraform -- see section 1."],
             ["terraform/rbac.tf", "The two consumer roles (ANALYST, COMPLIANCE) + their schema/warehouse/database grants -- see section 2b."],
+            ["terraform/pipeline_health.tf", "The Pipeline Health app's own stage, snowflake_streamlit object, and USAGE grant -- a separate app from streamlit.tf's dashboard."],
             ["dbt/trade_analytics/macros/create_masking_policies.sql", "Creates the two masking policies (idempotent, on-run-start hook) -- see section 2b."],
             ["dbt/trade_analytics/models/bronze/sources.yml", "Declares BRONZE as a dbt source -- Terraform + the Snowpark procedure own the actual objects."],
             ["dbt/trade_analytics/models/bronze/base_trades_raw.sql, base_fx_rates_raw.sql", "Thin passthrough views -- see section 2."],
@@ -321,9 +324,10 @@ def build():
             ["dbt/trade_analytics/models/gold/fct_trade_status.sql", "View computing ACTIVE/EXPIRED status + notional_usd. Masked for ANALYST -- see section 2b."],
             ["dbt/trade_analytics/models/gold/rpt_trade_report.sql", "Flat reporting view -- what dashboard/Summary.py queries. Masked for ANALYST -- see section 2b."],
             ["dbt Cloud (external, not a repo file)", "Hourly job: dbt run then dbt test. Separate monthly job: dbt snapshot. Reads/writes this repo via a deploy key (read-write, so the dbt Cloud IDE can branch/commit/push); separate Development and Production environments."],
+            ["orchestration/airflow/ (alternative)", "Complete Docker Compose Airflow stack (generate -> load -> dbt run -> dbt test, one DAG) -- a fully local control plane against the same cloud Snowflake account. Not the primary path, but genuinely runnable."],
             ["dashboard/Summary.py + pages/1_Trade_Details.py + common.py + environment.yml", "Multi-page Streamlit report over rpt_trade_report: Summary (KPIs + small charts with dynamic captions) and Trade Details (full table, per-trade Type 2 SCD history, rejected-trades audit). Runs natively in Snowflake (Streamlit in Snowflake, terraform/streamlit.tf) -- no local process; works locally too (streamlit run) via a Snowpark-session fallback, same code either way."],
-            ["dashboard/pages/2_Pipeline_Health.py + observability/pipeline_status.py", "Third dashboard page: live end-to-end pipeline status (Task states + TASK_HISTORY, alert state, CDC stream backlog, transform-layer freshness) in one place, plus resume/suspend buttons for every ingestion Task and the alert. Replaces the value an external orchestrator's UI would have given (see the removed Airflow alternative)."],
-            ["snowflake_sql/observability_toolkit.sql", "Ready-to-run debugging, time-travel, optimization and monitoring queries."],
+            ["observability/Pipeline_Health.py + pipeline_status.py (separate Streamlit app)", "Live end-to-end pipeline status (Task states + TASK_HISTORY, alert state, CDC stream backlog, transform-layer freshness) in one place, plus resume/suspend buttons for every ingestion Task and the alert -- for the primary (Snowflake Tasks + dbt Cloud) path. A separate app from the Trade Analytics dashboard, different audience/concern. The Airflow alternative below has its own UI for the same visibility on the fully-local path."],
+            ["observability/observability_toolkit.sql", "Ready-to-run debugging, time-travel, optimization and monitoring queries."],
             [".github/workflows/dbt_ci.yml, terraform_ci.yml", "CI/CD: dbt build/test on PR + merge; terraform fmt/validate/plan on PR, apply on manual dispatch (sequenced after plan to avoid an S3 state-lock race -- both verified live)."],
             ["docs/SETUP_GUIDE.md, VALIDATION_LOGIC.md, SCALABILITY.md", "Step-by-step setup, rule-by-rule rationale, and the failure-handling / monitoring / 10,000x-scale write-up."],
         ],

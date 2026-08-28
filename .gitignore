@@ -1,6 +1,7 @@
 # Secrets
 .env
 .git-credentials-temp
+orchestration/airflow/.env
 terraform.tfvars
 *.pem
 
@@ -25,6 +26,9 @@ terraform/crash.log
 data_generator/output/*.jsonl
 data_generator/output/fx_rates/*.csv
 
+# Airflow
+orchestration/airflow/logs/
+orchestration/airflow/plugins/
 
 # Editors / OS
 .vscode/

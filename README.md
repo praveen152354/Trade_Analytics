@@ -13,14 +13,14 @@ terraform/              IaC for all Snowflake objects: warehouse, db, schemas,
                         roles, stage, file format, raw table, stream, the
                         generation/ingestion Tasks, and the failure alert
 terraform/sql/          the one object Terraform can't manage yet (see below)
-snowflake_sql/          ready-to-run SQL: debugging, time travel, cost/perf
-                        optimization, observability, governance
 dbt/trade_analytics/    models/silver -> models/gold -> snapshots (Type 2 SCD)
-dashboard/              Streamlit trade-status dashboard -- runs natively in
-                        Snowflake (Streamlit in Snowflake), see below
-observability/          Live pipeline-status checks + task resume/suspend
-                        controls, imported by the dashboard's Pipeline
-                        Health page -- see below
+orchestration/airflow/  Docker Compose Airflow stack -- a fully-local
+                        alternative to the Snowflake Tasks + dbt Cloud path
+dashboard/              Trade Analytics app: Streamlit trade-status
+                        dashboard -- runs natively in Snowflake, see below
+observability/          Pipeline Health app (separate Streamlit in
+                        Snowflake app) + ready-to-run SQL (debugging, time
+                        travel, cost/perf optimization, task control)
 .github/workflows/      CI/CD for dbt and Terraform
 docs/                   architecture diagram, setup guide, validation logic,
                         scalability/monitoring write-up
@@ -66,69 +66,65 @@ plain columns — no joins required by a BI tool or a dashboard. It's what
 the dashboard queries, with filters (trader, book, counterparty, product
 type, currency, status, maturity date range) applied against it.
 
-### The dashboard — Streamlit in Snowflake, multi-page
+### Two Streamlit in Snowflake apps
 
-Three pages. The first two share filter state and query logic via
-`dashboard/common.py`; the third is a separate, operational concern:
+Both run natively inside Snowflake — no `.env`, no local Python process
+that has to keep running — and both work two ways with zero duplication:
+`get_active_session()` succeeds only when actually running inside
+Snowflake; locally (`streamlit run <entry file>`, using each app's own
+`requirements.txt` + a populated `.env`) that call raises, and a
+`Session.builder` fallback builds an equivalent Snowpark session instead —
+every query after that point is identical `session.sql(...)` code either
+way. Deliberately **two separate apps**, not one with extra pages: the
+trade-reporting dashboard and the pipeline-operations tool have different
+audiences and different concerns.
+
+**Trade Analytics** (`dashboard/`, `terraform/streamlit.tf`,
+`snowflake_streamlit.dashboard`) — the business-reporting app, two pages
+sharing filter state and query logic via `dashboard/common.py`:
 
 - **Summary** (`dashboard/Summary.py`, the app's entry point — named so
   Streamlit's sidebar nav, which derives a page's label from its filename
   for the entry file, actually reads "Summary" instead of "streamlit app")
-  — a
-  one-line dynamic narrative computed from the filtered data (trade count,
-  total notional, active %, largest exposure), 5 KPI cards, and a 2×2 grid
-  of small charts (status, notional by product, notional by currency,
-  rejections by reason), each with its own dynamically-computed one-line
-  caption (e.g. "USD dominates at 61% of the book") rather than a chart
-  left to speak for itself.
+  — a one-line dynamic narrative computed from the filtered data (trade
+  count, total notional, active %, largest exposure), 5 KPI cards, and a
+  2×2 grid of small charts (status, notional by product, notional by
+  currency, rejections by reason), each with its own dynamically-computed
+  one-line caption (e.g. "USD dominates at 61% of the book") rather than a
+  chart left to speak for itself.
 - **Trade Details** (`dashboard/pages/1_Trade_Details.py`) — the full
   filtered table, a per-trade drill-down that queries
   `valid_trades_snapshot` (the Type 2 SCD history) for whichever trade is
   selected and reports how many amendments it's had, and the rejected-
   trades audit log with its own reason filter.
-- **Pipeline Health** (`dashboard/pages/2_Pipeline_Health.py`, logic in
-  `observability/pipeline_status.py`) — the "one place to see the whole
-  pipeline end-to-end" view raised when the Airflow alternative was
-  removed (see "Orchestration" below): a left-to-right flow diagram
-  (Generate → Ingest Trades / Ingest FX → Stream → Transform → Gold) with
-  each stage colored live by its actual Snowflake state, per-task
-  `TASK_HISTORY` (last run status, error if any, next scheduled time),
-  the failure alert's state, whether the CDC stream has an unconsumed
-  backlog, and **resume/suspend buttons for every ingestion Task and the
-  alert, right from the page** (a confirmation step before resuming, since
-  that starts consuming warehouse credits on a schedule). The transform
-  layer's freshness is shown too, but deliberately as a proxy (newest row
-  in each GOLD/SILVER object) rather than a live dbt Cloud job-status
-  call — that would need Snowflake External Access + a stored dbt Cloud
-  API token, a separate decision with its own security tradeoffs, not
-  bundled in here.
 
-It runs natively inside Snowflake (a **Streamlit in Snowflake / SiS** app,
-`terraform/streamlit.tf`) rather than as a script on someone's laptop — no
-`.env`, no local Python process that has to keep running. It's a Snowflake
-object like any other Terraform-managed resource:
-`snowflake_stage.dashboard_stage` (`GOLD.DASHBOARD_STAGE`) holds the app
-files (`Summary.py`, `common.py`, `pages/1_Trade_Details.py`,
-`pages/2_Pipeline_Health.py`, and `pipeline_status.py` from
-`observability/`, uploaded flat alongside the rest) plus
-`dashboard/environment.yml` (Streamlit in Snowflake reads its package list
-from an `environment.yml` alongside the main file — every package in it,
-`streamlit`/`pandas`/`plotly`, has to exist in Snowflake's Anaconda
-channel; arbitrary `pip` packages aren't installable in the sandboxed SiS
-runtime), and `snowflake_streamlit.dashboard` registers the app itself,
-running queries on `TRADE_ANALYTICS_WH`. View it in Snowsight under
-**Projects → Streamlit**. The file *content* is uploaded via `PUT`,
-alongside `terraform/sql/generate_trade_files_procedure.sql`: Terraform
-registers the app object and the stage it lives on, and file content is
-pushed separately, the same pattern used for the stored procedure's code.
+**Pipeline Health** (`observability/`, `terraform/pipeline_health.tf`,
+`snowflake_streamlit.pipeline_health`) — a "one place to see the whole
+pipeline end-to-end" view of the *primary* (Snowflake Tasks + dbt Cloud)
+path, complementary to the Airflow alternative's own UI for the
+fully-local path (see "Orchestration" below): a left-to-right flow diagram
+(Generate → Ingest Trades / Ingest FX → Stream → Transform → Gold) with
+each stage colored live by its actual Snowflake state, per-task
+`TASK_HISTORY` (last run status, error if any, next scheduled time), the
+failure alert's state, whether the CDC stream has an unconsumed backlog,
+and **resume/suspend buttons for every ingestion Task and the alert,
+right from the page** (a confirmation step before resuming, since that
+starts consuming warehouse credits on a schedule). The transform layer's
+freshness is shown too, but deliberately as a proxy (newest row in each
+GOLD/SILVER object) rather than a live dbt Cloud job-status call — that
+would need Snowflake External Access + a stored dbt Cloud API token, a
+separate decision with its own security tradeoffs, not bundled in here.
+Status/control logic lives in `observability/pipeline_status.py`
+(self-contained — its own `get_session()`, not `dashboard/common.py`'s,
+since the two apps run on separate stages and can't import across each
+other); `observability/Pipeline_Health.py` is presentation only.
 
-The app code itself works two ways with zero duplication:
-`get_active_session()` (in `common.py`) succeeds only when actually running
-inside Snowflake; locally (`streamlit run dashboard/Summary.py`,
-using `dashboard/requirements.txt` + a populated `.env`) that call raises,
-and a `Session.builder` fallback builds an equivalent Snowpark session from
-`.env` instead — every query after that point is identical
-`session.sql(...).to_pandas()` code either way.
+Both apps follow the same deploy pattern: Terraform registers the
+`snowflake_stage` + `snowflake_streamlit` object and a `USAGE` grant to
+the transformer role; the file *content* is uploaded via `PUT` afterward
+— the same pattern used for `terraform/sql/generate_trade_files_procedure.sql`,
+since neither Terraform resource type can push file bytes, only register
+the object that points at them.
 
 ### RBAC & data masking
 
@@ -274,7 +270,7 @@ keys — illustrative at this project's row count (Snowflake's automatic
 micro-partitioning already handles a table this small), but real once
 either table is large enough that a maturity-date-range report or a
 by-day ingestion query would otherwise scan most of the table's
-partitions. `snowflake_sql/observability_toolkit.sql` §3.8 checks
+partitions. `observability/observability_toolkit.sql` §3.8 checks
 clustering health via `SYSTEM$CLUSTERING_INFORMATION()`, and §1.9
 demonstrates a `TEMPORARY` table for session-scoped ad-hoc debugging that
 needs no manual cleanup.
@@ -300,12 +296,15 @@ for, rather than one tool doing everything:
   `EXECUTE DBT PROJECT` (dbt Projects on Snowflake) is a newer,
   still-evolving feature, and dbt Cloud's own scheduler gives
   retries/logs/alerting for free without adding a dependency on it.
-An Airflow/Docker Compose alternative (the case study's preferred stack
-lists Airflow explicitly) was built and considered early on, then removed:
-it duplicated exactly what the Snowflake Tasks + dbt Cloud split above
-already does, with no functional gap it filled — a second orchestrator
-that never actually ran anything in this project wasn't worth the extra
-surface area to maintain and explain.
+- **Alternative**: `orchestration/airflow/` is a complete, working Docker
+  Compose Airflow stack that runs generate → load → `dbt run` → `dbt test`
+  as one DAG, entirely on a local machine against the same cloud Snowflake
+  account (only Terraform, and this DAG's own trigger, run locally —
+  storage and compute both stay in Snowflake). Kept as a genuine,
+  runnable alternative rather than a primary path, both because the case
+  study's preferred stack lists Airflow explicitly and because it's a
+  common reference pattern for running this kind of project end-to-end on
+  a standalone machine. See `docs/SETUP_GUIDE.md` step 6 to run it.
 
 **Why not have dbt Cloud orchestrate ingestion too** (it technically could,
 via `dbt run-operation` calling a macro that issues the `CALL
@@ -321,7 +320,7 @@ there, not a transformation tool pressed into running non-dbt SQL.
 **Current live status**: all three Tasks (`GENERATE_TRADE_FILES_TASK`,
 `INGEST_TRADES_TASK`, `INGEST_FX_RATES_TASK`) and `TASK_FAILURE_ALERT` are
 suspended — a deliberate, easily-reversible cost decision on a trial
-account, not a failure. `snowflake_sql/task_control.sql` has the exact
+account, not a failure. `observability/task_control.sql` has the exact
 resume commands; `terraform apply` after flipping `started`/`enabled` to
 `true` in the `.tf` files works too. dbt Cloud's jobs are unaffected and
 run on their normal schedule regardless (hourly `run`+`test`, monthly
@@ -331,6 +330,6 @@ it doesn't depend on the ingestion Tasks being active.
 See [docs/SCALABILITY.md](docs/SCALABILITY.md) for the Snowflake
 `ACCOUNT_USAGE`/`TASK_HISTORY` queries used for pipeline health monitoring
 and how failures, delays, and data quality issues are handled, and
-[snowflake_sql/observability_toolkit.sql](snowflake_sql/observability_toolkit.sql)
+[observability/observability_toolkit.sql](observability/observability_toolkit.sql)
 for a ready-to-run library of debugging, time-travel, optimization, and
 monitoring queries against this project's actual objects.

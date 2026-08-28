@@ -3,9 +3,10 @@ Uploads generated trade batch file(s) to the Snowflake internal stage
 (@BRONZE.TRADES_STAGE) and issues COPY INTO to load them into BRONZE.TRADES_RAW.
 
 Credentials are read from environment variables (see .env.example). This
-script is a standalone dev/test path for manual CLI use; the scheduled
-production path is the Snowpark procedure + Snowflake Tasks in
-terraform/orchestration.tf.
+script is invoked both from the CLI for manual testing and from the Airflow
+DAG (orchestration/airflow/dags/trade_pipeline_dag.py) — a standalone
+dev/test path; the scheduled production path is the Snowpark procedure +
+Snowflake Tasks in terraform/orchestration.tf.
 """
 
 import argparse

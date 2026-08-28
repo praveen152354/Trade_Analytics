@@ -16,7 +16,7 @@ resource "snowflake_task" "generate_trade_files_task" {
   schema    = "BRONZE"
   name      = "GENERATE_TRADE_FILES_TASK"
   warehouse = snowflake_warehouse.trade_analytics_wh.name
-  started   = false # intentionally suspended for now (cost) — flip to true + apply, or see snowflake_sql/task_control.sql, to resume
+  started   = false # intentionally suspended for now (cost) — flip to true + apply, or see observability/task_control.sql, to resume
   comment   = "Writes a new mock trade batch file to BRONZE.TRADES_STAGE on a schedule."
 
   schedule {
@@ -41,7 +41,7 @@ resource "snowflake_task" "ingest_trades_task" {
   schema    = "BRONZE"
   name      = "INGEST_TRADES_TASK"
   warehouse = snowflake_warehouse.trade_analytics_wh.name
-  started   = false # intentionally suspended for now (cost) — flip to true + apply, or see snowflake_sql/task_control.sql, to resume
+  started   = false # intentionally suspended for now (cost) — flip to true + apply, or see observability/task_control.sql, to resume
   comment   = "Polls BRONZE.TRADES_STAGE and COPY INTOs any new files. Runs on its own cadence, independent of generation."
 
   schedule {
@@ -84,7 +84,7 @@ resource "snowflake_alert" "task_failure_alert" {
   schema    = "BRONZE"
   name      = "TASK_FAILURE_ALERT"
   warehouse = snowflake_warehouse.trade_analytics_wh.name
-  enabled   = false # intentionally suspended alongside the tasks it watches (cost) — see snowflake_sql/task_control.sql to resume
+  enabled   = false # intentionally suspended alongside the tasks it watches (cost) — see observability/task_control.sql to resume
   comment   = "Emails alert_email if any pipeline task failed in the last 15 minutes."
 
   alert_schedule {
