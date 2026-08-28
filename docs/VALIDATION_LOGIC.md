@@ -105,9 +105,10 @@ ask.
 ## Tech stack choices
 
 - **Snowflake internal stage + `COPY INTO`** for ingestion rather than
-  Snowpipe: this is a scheduled batch pipeline (Airflow triggers it), so
-  Snowpipe's event-driven auto-ingest doesn't add value here and would add
-  an extra moving part (cloud notification integration) for a trial account.
+  Snowpipe: this is a scheduled batch pipeline (a Snowflake Task triggers
+  it — see the "Orchestration" section of the README), so Snowpipe's
+  event-driven auto-ingest doesn't add value here and would add an extra
+  moving part (cloud notification integration) for a trial account.
   Swapping to Snowpipe/Snowpipe Streaming later is a drop-in change — the
   stage/file-format/raw table shape stays identical.
 - **Streams + incremental dbt models** as the "processing engine" (per the
@@ -118,9 +119,12 @@ ask.
   the rules are all set-based (version comparison, date comparison), which
   Snowflake's query engine does far more efficiently at scale than
   row-by-row Python, and dbt gives us tests, docs, and lineage for free.
-- **Airflow (Docker Compose)** for orchestration: matches the brief's
-  preferred stack, gives DAG-level retries/alerting/history out of the box,
-  and is portable to Cloud Composer with no DAG changes.
+- **Snowflake Tasks for ingestion, dbt Cloud for transformation** rather
+  than a single external orchestrator (Airflow was built and considered,
+  then removed — see the README's "Orchestration" section for why): each
+  tool orchestrates the part it's actually built for, and both give
+  retries/alerting/history out of the box without an extra system to run
+  and maintain.
 - **Terraform (`snowflakedb/snowflake` provider)** for IaC: the warehouse,
   database/schemas, roles, stage, file format, raw table and stream are all
   declared once and reproducible; nothing in this project was clicked into

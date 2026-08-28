@@ -16,8 +16,6 @@ terraform/sql/          the one object Terraform can't manage yet (see below)
 snowflake_sql/          ready-to-run SQL: debugging, time travel, cost/perf
                         optimization, observability, governance
 dbt/trade_analytics/    models/silver -> models/gold -> snapshots (Type 2 SCD)
-orchestration/airflow/  Docker Compose Airflow stack — an alternative
-                        orchestrator, documented but not the primary path
 dashboard/              Streamlit trade-status dashboard -- runs natively in
                         Snowflake (Streamlit in Snowflake), see below
 .github/workflows/      CI/CD for dbt and Terraform
@@ -280,11 +278,12 @@ for, rather than one tool doing everything:
   `EXECUTE DBT PROJECT` (dbt Projects on Snowflake) is a newer,
   still-evolving feature, and dbt Cloud's own scheduler gives
   retries/logs/alerting for free without adding a dependency on it.
-- **Alternative**: `orchestration/airflow/` is a complete, working Docker
-  Compose Airflow stack that runs generate → load → `dbt run` → `dbt test`
-  as one DAG. It's kept as a documented alternative (the case study's
-  preferred stack lists Airflow explicitly) but isn't the path this repo
-  runs day to day.
+An Airflow/Docker Compose alternative (the case study's preferred stack
+lists Airflow explicitly) was built and considered early on, then removed:
+it duplicated exactly what the Snowflake Tasks + dbt Cloud split above
+already does, with no functional gap it filled — a second orchestrator
+that never actually ran anything in this project wasn't worth the extra
+surface area to maintain and explain.
 
 **Why not have dbt Cloud orchestrate ingestion too** (it technically could,
 via `dbt run-operation` calling a macro that issues the `CALL

@@ -11,9 +11,6 @@
 - A dbt Cloud account (trial is fine) if you want the scheduled dbt
   run/test job — otherwise `dbt run`/`dbt test` from the CLI is enough
 - Git
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) — only
-  if you want the Airflow *alternative* orchestrator; not needed for the
-  primary Snowflake-native + dbt Cloud path
 
 ## 1. Bootstrap remote state, deploy `BRONZE.GENERATE_TRADE_FILES`, then provision everything else with Terraform
 
@@ -183,22 +180,7 @@ All of the above is scriptable via the [dbt Cloud Admin API](https://docs.getdbt
 if you'd rather automate it than click through the UI — that's how this
 project's own dbt Cloud project was set up.
 
-## 6. (Optional) Alternative orchestrator: Airflow
-
-Only needed if you'd rather run generate → load → `dbt run` → `dbt test`
-as one Airflow DAG instead of the Snowflake Tasks + dbt Cloud path above:
-
-```powershell
-cp .env orchestration\airflow\.env   # docker compose reads .env from this folder
-cd orchestration\airflow
-docker compose up --build
-```
-
-Open http://localhost:8080 (`AIRFLOW_ADMIN_USER` / `AIRFLOW_ADMIN_PASSWORD`
-from `.env`, default `admin`/`admin`), unpause the `trade_pipeline` DAG. It
-runs every 30 minutes and can be triggered manually from the UI.
-
-## 7. Dashboard
+## 6. Dashboard
 
 Runs natively in Snowflake (Streamlit in Snowflake) once `terraform apply`
 has provisioned `terraform/streamlit.tf` — view it in Snowsight under
@@ -210,7 +192,7 @@ pip install -r requirements.txt
 streamlit run Summary.py
 ```
 
-## 8. CI/CD
+## 7. CI/CD
 
 GitHub Actions workflows are in `.github/workflows/`:
 - `dbt_ci.yml` — `dbt parse` + `dbt build` against an isolated CI schema on

@@ -78,7 +78,7 @@ def build():
     style.font.size = Pt(10.5)
 
     add_title(doc, "Trade Analytics — Provisioned Objects & Scripts")
-    add_subtitle(doc, "Data Engineering Case Study — Snowflake + dbt + Airflow + Terraform")
+    add_subtitle(doc, "Data Engineering Case Study — Snowflake + dbt + Terraform")
     doc.add_paragraph()
 
     # ---------------------------------------------------------------
@@ -321,7 +321,6 @@ def build():
             ["dbt/trade_analytics/models/gold/fct_trade_status.sql", "View computing ACTIVE/EXPIRED status + notional_usd. Masked for ANALYST -- see section 2b."],
             ["dbt/trade_analytics/models/gold/rpt_trade_report.sql", "Flat reporting view -- what dashboard/Summary.py queries. Masked for ANALYST -- see section 2b."],
             ["dbt Cloud (external, not a repo file)", "Hourly job: dbt run then dbt test. Separate monthly job: dbt snapshot. Reads/writes this repo via a deploy key (read-write, so the dbt Cloud IDE can branch/commit/push); separate Development and Production environments."],
-            ["orchestration/airflow/ (alternative)", "Complete Docker Compose Airflow stack, documented but not the primary orchestration path."],
             ["dashboard/Summary.py + pages/1_Trade_Details.py + common.py + environment.yml", "Multi-page Streamlit report over rpt_trade_report: Summary (KPIs + small charts with dynamic captions) and Trade Details (full table, per-trade Type 2 SCD history, rejected-trades audit). Runs natively in Snowflake (Streamlit in Snowflake, terraform/streamlit.tf) -- no local process; works locally too (streamlit run) via a Snowpark-session fallback, same code either way."],
             ["snowflake_sql/observability_toolkit.sql", "Ready-to-run debugging, time-travel, optimization and monitoring queries."],
             [".github/workflows/dbt_ci.yml, terraform_ci.yml", "CI/CD: dbt build/test on PR + merge; terraform fmt/validate/plan on PR, apply on manual dispatch (sequenced after plan to avoid an S3 state-lock race -- both verified live)."],

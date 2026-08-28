@@ -1,8 +1,7 @@
 # Safe to commit: every value is pulled from an environment variable at run
 # time via env_var(), so no secret literal ever lives in this file. Used by
-# dbt-core locally, inside the Airflow container (DBT_PROFILES_DIR points
-# here), and in CI. dbt Cloud ignores this file and uses its own managed
-# connection instead.
+# dbt-core locally and in CI. dbt Cloud ignores this file and uses its own
+# managed connection instead.
 
 trade_analytics:
   target: dev
