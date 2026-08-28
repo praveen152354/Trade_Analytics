@@ -195,6 +195,12 @@
 </div>
 
 <div class="component">
+  <div class="comp-head"><span class="comp-icon">🪟</span><h3>BRONZE's dbt Views</h3><span class="layer-tag tag-bronze">bronze</span></div>
+  <p>Two very simple dbt "models" sit in Bronze too — <code>base_trades_raw</code> and <code>base_fx_rates_raw</code> — each just a plain "show me everything in this raw table" view. They don't clean or filter anything; they exist so Bronze shows up as a real, clickable part of the data lineage diagram instead of an empty gap before Silver.</p>
+  <div class="analogy">Like a reception desk sign that just says "everything received today is in that pile" — it doesn't sort the mail, it just makes the pile visible and pointed-at.</div>
+</div>
+
+<div class="component">
   <div class="comp-head"><span class="comp-icon">🥈</span><h3>SILVER — Cleaning &amp; Business Rules</h3><span class="layer-tag tag-silver">silver</span></div>
   <p>This is where the real decision-making happens, in two steps:</p>
   <p><b>Step 1 — Flatten:</b> raw trade messages arrive as one blob of JSON; this step breaks them out into normal columns (trade ID, version, maturity date, notional amount, currency, and so on).</p>
@@ -206,6 +212,12 @@
     <tr><td>Two versions in one batch</td><td>The newer one is accepted; the older one is logged as rejected rather than silently thrown away.</td></tr>
   </table>
   <div class="why"><b>Why one single place for all these decisions?</b> If "accept or reject" logic were scattered across several files, they could quietly drift out of sync with each other over time. Having exactly one decision point means there is exactly one place to look, trust, and test.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🧹</span><h3>FX Rates, Deduplicated</h3><span class="layer-tag tag-silver">silver</span></div>
+  <p>Bronze never deletes or overwrites — if someone edits an FX-rate file and re-uploads it under the same name, the system treats it as a brand-new file and keeps <i>both</i> the old and corrected values sitting in Bronze. A Silver step resolves that: it always keeps exactly one row per day per currency — whichever value was loaded most recently — while Bronze quietly holds onto the full history underneath, in case anyone ever needs to see what changed.</p>
+  <div class="analogy">Like a whiteboard that always shows today's number, while a logbook underneath records every correction anyone ever made to it.</div>
 </div>
 
 <div class="component">

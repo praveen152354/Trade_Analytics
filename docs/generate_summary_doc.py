@@ -114,9 +114,25 @@ def build():
             ["GENERATE_TRADE_FILES_TASK", "Task", "BRONZE", "Calls the procedure every 2 min (configurable). Auto-retries 2x on failure."],
             ["INGEST_TRADES_TASK", "Task", "BRONZE", "COPY INTOs new stage files every 5 min (configurable). Independent schedule from generation."],
             ["TRADE_PIPELINE_ALERT", "Email notification integration", "—", "Lets Snowflake send email for the alert below."],
-            ["TASK_FAILURE_ALERT", "Alert", "BRONZE", "Every 15 min, emails if either task failed in TASK_HISTORY."],
+            ["TASK_FAILURE_ALERT", "Alert", "BRONZE", "Every 15 min, emails if any of the three tasks failed in TASK_HISTORY."],
+            ["FX_RATES_S3_INTEGRATION", "Storage integration", "—", "IAM role trust to S3 -- no long-lived AWS key stored in Snowflake."],
+            ["FX_RATES_STAGE", "External stage (S3)", "BRONZE", "Points at s3://<bucket>/fx_rates/ -- manually-uploaded daily rate CSVs land here."],
+            ["FX_RATES_CSV_FORMAT", "File format", "BRONZE", "CSV, skip_header=1."],
+            ["FX_RATES_RAW", "Table", "BRONZE", "Append-only landing table for daily FX rates (as_of_date, currency, rate_to_usd)."],
+            ["INGEST_FX_RATES_TASK", "Task", "BRONZE", "COPY INTOs new S3 files once daily (configurable). No PURGE -- IAM policy is read-only and it's the user's own bucket."],
         ],
         col_widths=[1.7, 1.5, 1.0, 3.2],
+    )
+
+    doc.add_paragraph(
+        "AWS side (terraform/aws.tf): an S3 bucket (versioned, encrypted, "
+        "public access blocked), a read-only IAM policy scoped to the "
+        "fx_rates/ prefix, and the IAM role Snowflake assumes. The role's "
+        "trust policy needs values Snowflake only generates after the "
+        "storage integration exists, and the integration needs the role's "
+        "ARN as input -- resolved in one terraform apply by predicting the "
+        "role's ARN from account_id + role name (deterministic) rather "
+        "than the usual two-pass setup."
     )
 
     doc.add_paragraph(
@@ -138,14 +154,28 @@ def build():
         doc,
         ["Model", "Materialization", "What it does"],
         [
+            ["base_trades_raw (BRONZE)", "view", "Thin passthrough over TRADES_RAW -- documentation/lineage only, not the actual trades data path."],
+            ["base_fx_rates_raw (BRONZE)", "view", "Thin passthrough over FX_RATES_RAW -- this one IS the real source silver.fx_rates builds from."],
             ["stg_trades (SILVER)", "incremental (append)", "Flattens raw JSON from the stream into typed columns."],
             ["int_trades_evaluated (SILVER)", "incremental (append)", "Single decision point: accepts or rejects each trade message and records why."],
+            ["fx_rates (SILVER)", "incremental (merge on as_of_date+currency)", "Deduplicates FX_RATES_RAW to one row per date+currency -- the latest loaded value."],
             ["valid_trades (GOLD)", "incremental (merge on trade_id)", "One row per trade_id — the latest accepted version."],
             ["rejected_trades (GOLD)", "incremental (append)", "Compliance audit log of every rejected message + reason."],
             ["trade_status (GOLD)", "view", "valid_trades + computed ACTIVE/EXPIRED + notional_usd (convert_to_usd macro)."],
             ["valid_trades_snapshot (GOLD)", "snapshot, check strategy", "Type 2 SCD history of valid_trades. Run monthly (1st, 01:00 UTC), not on the hourly job."],
         ],
         col_widths=[1.9, 1.8, 3.3],
+    )
+
+    doc.add_paragraph(
+        "Why fx_rates exists: Snowflake's COPY INTO treats an edited file "
+        "re-uploaded under the same name as new rather than overwriting, so "
+        "a corrected rate file can legitimately create a second row for the "
+        "same (as_of_date, currency) in FX_RATES_RAW. fx_rates resolves it "
+        "with the same merge-on-latest pattern as valid_trades -- verified "
+        "live by deliberately re-uploading an edited rate file and "
+        "confirming BRONZE kept both rows (for audit) while SILVER showed "
+        "only the latest."
     )
 
     add_table(
@@ -171,11 +201,15 @@ def build():
         ["Path", "Purpose"],
         [
             ["data_generator/generate_trades.py + load_to_snowflake.py", "Standalone dev/test path (PUT + COPY INTO from a local machine) -- not part of the scheduled production flow."],
-            ["terraform/*.tf", "IaC for every Snowflake object listed in section 1, including the Tasks and Alert."],
-            ["terraform/sql/generate_trade_files_procedure.sql", "The one object deployed outside Terraform -- see section 1."],
-            ["dbt/trade_analytics/models/bronze/sources.yml", "Declares BRONZE as a dbt source (no models materialize here -- Terraform + the Snowpark procedure own it) so it still shows up in dbt's lineage graph."],
+            ["data_generator/generate_fx_rates.py", "Generates one CSV per day (realistic day-to-day rate drift, not static) for manual upload to S3 -- not an automated feed."],
+            ["terraform/*.tf", "IaC for every Snowflake and AWS object listed in section 1, including the Tasks and Alert."],
+            ["terraform/backend.tf + bootstrap_state_backend.py", "S3 remote state (shared between local applies and CI) + the one-time script that creates the bucket Terraform can't create for itself."],
+            ["terraform/sql/generate_trade_files_procedure.sql", "The one Snowflake object deployed outside Terraform -- see section 1."],
+            ["dbt/trade_analytics/models/bronze/sources.yml", "Declares BRONZE as a dbt source -- Terraform + the Snowpark procedure own the actual objects."],
+            ["dbt/trade_analytics/models/bronze/base_trades_raw.sql, base_fx_rates_raw.sql", "Thin passthrough views -- see section 2."],
             ["dbt/trade_analytics/models/silver/stg_trades.sql", "Consumes the BRONZE stream, flattens VARIANT to columns."],
             ["dbt/trade_analytics/models/silver/int_trades_evaluated.sql", "All business-rule logic (accept/reject + reason)."],
+            ["dbt/trade_analytics/models/silver/fx_rates.sql", "Merge-dedup of FX_RATES_RAW -- see section 2."],
             ["dbt/trade_analytics/macros/convert_to_usd.sql", "Currency-conversion macro: loops over an FX-rate var to build a CASE expression."],
             ["dbt/trade_analytics/snapshots/valid_trades_snapshot.sql", "Type 2 SCD snapshot of the trade book, run monthly."],
             ["dbt/trade_analytics/models/gold/valid_trades.sql", "Merge-incremental table of current accepted trades."],
@@ -185,7 +219,7 @@ def build():
             ["orchestration/airflow/ (alternative)", "Complete Docker Compose Airflow stack, documented but not the primary orchestration path."],
             ["dashboard/streamlit_app.py", "Optional Streamlit dashboard over trade_status and rejected_trades."],
             ["snowflake_sql/observability_toolkit.sql", "Ready-to-run debugging, time-travel, optimization and monitoring queries."],
-            [".github/workflows/dbt_ci.yml, terraform_ci.yml", "CI/CD: dbt build/test on PR + merge; terraform fmt/validate/plan on PR, apply on manual dispatch."],
+            [".github/workflows/dbt_ci.yml, terraform_ci.yml", "CI/CD: dbt build/test on PR + merge; terraform fmt/validate/plan on PR, apply on manual dispatch (sequenced after plan to avoid an S3 state-lock race -- both verified live)."],
             ["docs/SETUP_GUIDE.md, VALIDATION_LOGIC.md, SCALABILITY.md", "Step-by-step setup, rule-by-rule rationale, and the failure-handling / monitoring / 10,000x-scale write-up."],
         ],
         col_widths=[3.6, 3.4],
@@ -197,7 +231,7 @@ def build():
     add_h2(doc, "4. Pipeline flow")
     add_code_block(
         doc,
-        "BRONZE          SILVER                GOLD\n"
+        "BRONZE                    SILVER                GOLD\n"
         "\n"
         "GENERATE_TRADE_FILES_TASK (every 2 min)\n"
         "      |  CALL BRONZE.GENERATE_TRADE_FILES(...)\n"
@@ -209,6 +243,8 @@ def build():
         "                                                        |\n"
         "                                                  TRADES_RAW_STREAM\n"
         "                                                        |\n"
+        "                                          base_trades_raw (view, lineage only)\n"
+        "                                                        |\n"
         "                                            stg_trades  (dbt Cloud,\n"
         "                                                  |      hourly job)\n"
         "                                        int_trades_evaluated\n"
@@ -217,7 +253,16 @@ def build():
         "                                    /        \\\n"
         "                          trade_status   valid_trades_snapshot\n"
         "                          (view, incl.    (Type 2 SCD, dbt Cloud\n"
-        "                           notional_usd)   monthly job: 1st, 01:00 UTC)",
+        "                           notional_usd)   monthly job: 1st, 01:00 UTC)\n"
+        "\n"
+        "Manual upload --> S3 (fx_rates/) --> FX_RATES_STAGE\n"
+        "                                          |  polls, once daily\n"
+        "                                          v\n"
+        "                              INGEST_FX_RATES_TASK --(COPY INTO)--> FX_RATES_RAW\n"
+        "                                                                        |\n"
+        "                                                          base_fx_rates_raw (view)\n"
+        "                                                                        |\n"
+        "                                                  fx_rates  (merge-dedup, dbt Cloud hourly job)",
     )
 
     add_h2(doc, "5. Connection details for this account")
