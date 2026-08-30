@@ -43,3 +43,4 @@ dbt/trade_analytics/.user.yml
 
 # Generated deliverable docs (source is tracked; regenerate, don't commit the binary)
 Trade_Analytics_Complete_Reference.pdf
+Trade_Analytics_Architecture_Flow.png

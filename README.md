@@ -7,7 +7,7 @@ business rules in dbt, and split into valid/rejected tables for compliance —
 orchestrated natively in Snowflake, with dbt run/test/snapshot scheduled
 through dbt Cloud.
 
-![Architecture diagram](trade_analytics_architecture_v6.png)
+![Architecture diagram](Architecture_diagram.png)
 
 ```
 data_generator/        local generator + loader (manual/dev use — see below)
