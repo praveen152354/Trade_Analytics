@@ -7,6 +7,8 @@ business rules in dbt, and split into valid/rejected tables for compliance —
 orchestrated natively in Snowflake, with dbt run/test/snapshot scheduled
 through dbt Cloud.
 
+![Architecture diagram](Trade_Analytics_Architecture_Flow.png)
+
 ```
 data_generator/        local generator + loader (manual/dev use — see below)
 terraform/              IaC for all Snowflake objects: warehouse, db, schemas,
@@ -31,7 +33,10 @@ See **[docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md)** for step-by-step setup,
 business rule is implemented and why the stack is shaped this way, and
 **[docs/SCALABILITY.md](docs/SCALABILITY.md)** for how the pipeline handles
 failures, is monitored via Snowflake's admin views, and scales to 10,000x
-volume. The architecture diagram source is
+volume. The architecture diagram above is generated from
+[docs/architecture_flow.html](docs/architecture_flow.html) (open that file
+in a browser to see it rendered — GitHub only shows HTML as source, not
+live); a separate, more technical component/dependency view is
 [docs/architecture.puml](docs/architecture.puml).
 
 ## Medallion architecture
@@ -277,45 +282,65 @@ needs no manual cleanup.
 
 ## Orchestration
 
-Split deliberately across two orchestrators, each doing what it's built
-for, rather than one tool doing everything:
+Two orchestration paths are fully built and provisioned. **Only one is
+actively triggering the pipeline right now** — that distinction matters,
+so it's kept explicit below rather than described as if both run.
 
-- **Ingestion** (Snowflake-native): two `snowflake_task` resources in
-  `terraform/orchestration.tf`, each with `task_auto_retry_attempts = 2` and
-  `suspend_task_after_num_failures = 3`. A `snowflake_alert` checks
-  `TASK_HISTORY` every 15 minutes and emails on any failure via a
-  `snowflake_email_notification_integration`. `BRONZE.GENERATE_TRADE_FILES`
-  itself is deployed via `terraform/sql/generate_trade_files_procedure.sql`
-  rather than as a `snowflake_procedure_python` resource, so its Python
-  body stays under direct version control, reviewable in one file.
-- **Transformation**: dbt run/test is scheduled hourly, and the Type 2 SCD
-  snapshot monthly, through dbt Cloud jobs (project reads this repo via a
-  deploy key — read-write, so the dbt Cloud IDE can also branch/commit/push
-  directly; a read-only key blocks that even though scheduled jobs never
-  need write access) — not through Snowflake Tasks;
-  `EXECUTE DBT PROJECT` (dbt Projects on Snowflake) is a newer,
-  still-evolving feature, and dbt Cloud's own scheduler gives
-  retries/logs/alerting for free without adding a dependency on it.
-- **Alternative**: `orchestration/airflow/` is a complete, working Docker
-  Compose Airflow stack that runs generate → load → `dbt run` → `dbt test`
-  as one DAG, entirely on a local machine against the same cloud Snowflake
-  account (only Terraform, and this DAG's own trigger, run locally —
-  storage and compute both stay in Snowflake). Kept as a genuine,
-  runnable alternative rather than a primary path, both because the case
-  study's preferred stack lists Airflow explicitly and because it's a
-  common reference pattern for running this kind of project end-to-end on
-  a standalone machine. See `docs/SETUP_GUIDE.md` step 6 to run it.
+- **Currently active — Airflow** (`orchestration/airflow/`, Docker
+  Compose, runs locally against the same live cloud Snowflake account —
+  only the control plane is local, storage and compute stay in
+  Snowflake): the `trade_pipeline` DAG runs hourly, `generate_trades ->
+  load_to_snowflake -> dbt_deps -> dbt_run -> dbt_test`. A separate
+  `trade_snapshot` DAG runs monthly (`0 1 1 * *`), `dbt_deps ->
+  dbt_snapshot` — its own DAG rather than a step tacked onto the hourly
+  one, since a `check`-strategy snapshot would be a cheap no-op running
+  hourly, but "safe to run more often" isn't the same as "should."
+  Failure emails go out via Airflow's own SMTP config (`ALERT_EMAIL_TO`
+  in `docker-compose.yml`), not the Snowflake-native alerting below.
+- **Provisioned, currently idle — Snowflake-native ingestion + dbt
+  Cloud transformation**: the two `snowflake_task` resources in
+  `terraform/orchestration.tf` are currently `started = false`; the
+  `snowflake_alert` that checks `TASK_HISTORY` every 15 minutes is
+  currently `enabled = false`; dbt Cloud's hourly run/test job and
+  monthly snapshot job both still exist but have their cron schedules
+  switched off (verified live via the dbt Cloud Admin API —
+  `trigger.schedule: false` on both). Nothing here is deleted, just
+  descheduled — either path can be manually triggered or re-enabled at
+  any time. `BRONZE.GENERATE_TRADE_FILES` itself is still deployed via
+  `terraform/sql/generate_trade_files_procedure.sql` rather than a
+  `snowflake_procedure_python` resource, so its Python body stays under
+  direct version control, reviewable in one file — that part of the
+  design is unaffected by which orchestrator is switched on.
+- **Why only one runs at a time**: two schedulers independently
+  triggering runs against the same live Snowflake objects is exactly
+  what caused a real duplicate-row bug — a stale local file getting
+  re-uploaded picked up a new gzip checksum on re-compression, slipped
+  past Snowflake's own file-level dedup, and landed genuine duplicate
+  rows in `BRONZE.TRADES_RAW` that broke `int_trades_evaluated`'s MERGE
+  downstream (fixed at the loader — the local file is now deleted
+  unconditionally after every `COPY INTO` attempt — and defended again
+  at the `stg_trades` boundary with a dedup plus a `unique` test).
+  Running a single orchestrator removes that race entirely, rather than
+  just fixing the one incident it caused.
+- **Why Airflow is the one left switched on**: the case study's
+  preferred stack lists Airflow explicitly, and a local-control-plane
+  orchestrator (generate -> load -> `dbt run` -> `dbt test`, one DAG, one
+  place to look) is a common reference pattern for running this kind of
+  project end-to-end — restored specifically after reviewer feedback
+  described that as the more typical implementation.
 
 **Why not have dbt Cloud orchestrate ingestion too** (it technically could,
 via `dbt run-operation` calling a macro that issues the `CALL
-GENERATE_TRADE_FILES` / `COPY INTO`)? Two reasons this wasn't done: the two
-ingestion Tasks run on independent, minute-level schedules (generation
+GENERATE_TRADE_FILES` / `COPY INTO`)? The Snowflake-native ingestion Tasks
+were designed to run on independent, minute-level schedules (generation
 every 2 min, ingestion every 5 min) specifically to simulate a continuous
 upstream feed decoupled from ingestion cadence — collapsing that into dbt
 Cloud's hourly job would mean trades only "arrive" once an hour, losing
 that realism. And the case study brief itself lists `Ingestion: Snowflake
 Native` as a separate line from orchestration — Tasks are the expected fit
-there, not a transformation tool pressed into running non-dbt SQL.
+there, not a transformation tool pressed into running non-dbt SQL. That
+reasoning shaped how the Snowflake-native path is built, independent of
+which path is currently switched on.
 
 **Current live status**: all three Tasks (`GENERATE_TRADE_FILES_TASK`,
 `INGEST_TRADES_TASK`, `INGEST_FX_RATES_TASK`) and `TASK_FAILURE_ALERT` are
