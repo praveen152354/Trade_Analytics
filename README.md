@@ -7,7 +7,7 @@ business rules in dbt, and split into valid/rejected tables for compliance —
 orchestrated natively in Snowflake, with dbt run/test/snapshot scheduled
 through dbt Cloud.
 
-![Architecture diagram](Trade_Analytics_Architecture_Flow.png)
+![Architecture diagram](trade_analytics_architecture_v6.png)
 
 ```
 data_generator/        local generator + loader (manual/dev use — see below)
@@ -33,10 +33,13 @@ See **[docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md)** for step-by-step setup,
 business rule is implemented and why the stack is shaped this way, and
 **[docs/SCALABILITY.md](docs/SCALABILITY.md)** for how the pipeline handles
 failures, is monitored via Snowflake's admin views, and scales to 10,000x
-volume. The architecture diagram above is generated from
-[docs/architecture_flow.html](docs/architecture_flow.html) (open that file
-in a browser to see it rendered — GitHub only shows HTML as source, not
-live); a separate, more technical component/dependency view is
+volume. The earlier logo-based version of the architecture diagram (source:
+[docs/architecture_flow.html](docs/architecture_flow.html) — open it in a
+browser to see it rendered, since GitHub only shows HTML as source, not
+live) now lives inside **docs/complete_reference.html**, the single
+consolidated write-up that replaced this project's three separate PDF/DOCX
+deliverables (provisioned objects, plain-English walkthrough, and the role
+of Terraform). A separate, more technical component/dependency view is
 [docs/architecture.puml](docs/architecture.puml).
 
 ## Medallion architecture

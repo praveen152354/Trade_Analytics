@@ -42,6 +42,4 @@ Thumbs.db
 dbt/trade_analytics/.user.yml
 
 # Generated deliverable docs (source is tracked; regenerate, don't commit the binary)
-Trade_Analytics_Summary.docx
-Trade_Analytics_Project_Flow_Explained.pdf
-Trade_Analytics_Terraform_Role_Explained.pdf
+Trade_Analytics_Complete_Reference.pdf

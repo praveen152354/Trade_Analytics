@@ -1,0 +1,849 @@
+<!--
+  Source for Trade_Analytics_Complete_Reference.pdf (not committed — see
+  .gitignore). Consolidates the three prior documents (Summary.docx,
+  Project_Flow_Explained.pdf, Terraform_Role_Explained.pdf) plus the
+  logo-based architecture diagram into one file. Regenerate with headless
+  Chrome:
+
+  & "C:\Program Files\Google\Chrome\Application\chrome.exe" `
+    --headless --disable-gpu --no-pdf-header-footer --virtual-time-budget=9000 `
+    --print-to-pdf="Trade_Analytics_Complete_Reference.pdf" `
+    "file:///C:/path/to/docs/complete_reference.html"
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Trade Analytics — Complete Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap">
+<style>
+  @page { size: A4; margin: 16mm 14mm; }
+  * { box-sizing: border-box; }
+
+  :root {
+    --ink: #161b22;
+    --ink-soft: #4b5768;
+    --ink-faint: #8592a3;
+    --paper: #f6f7f9;
+    --surface: #ffffff;
+    --surface-2: #eef0f4;
+    --border: #dde1e8;
+
+    --violet: #5c4ee5;
+    --violet-deep: #362a99;
+    --violet-soft: #ece9fb;
+
+    --add: #16794a;
+    --add-soft: #e2f5ec;
+    --add-border: #a9d8bf;
+
+    --change: #92640a;
+    --change-soft: #faf0d9;
+    --change-border: #e3c785;
+
+    --destroy: #b23b3b;
+    --destroy-soft: #fbe9e9;
+    --destroy-border: #e6b3b3;
+  }
+
+  body {
+    font-family: 'IBM Plex Sans', 'Segoe UI', Calibri, Arial, sans-serif;
+    color: var(--ink);
+    line-height: 1.55;
+    font-size: 10.6pt;
+    margin: 0;
+    background: var(--surface);
+  }
+  h1, h2, h3, h4 { font-family: 'IBM Plex Sans', 'Segoe UI', Calibri, Arial, sans-serif; color: var(--ink); font-weight: 600; }
+  code, .mono { font-family: 'IBM Plex Mono', Consolas, monospace; }
+  code { background: var(--surface-2); padding: 1px 5px; border-radius: 3px; font-size: 90%; font-family: 'IBM Plex Mono', Consolas, monospace; }
+
+  /* ===================== MASTER COVER ===================== */
+  .cover {
+    height: 259mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    page-break-after: always;
+    background:
+      radial-gradient(ellipse 620px 420px at 85% 0%, rgba(92,78,229,0.35), transparent 60%),
+      linear-gradient(165deg, #12101f 0%, #191533 55%, #211a45 100%);
+    color: white;
+    margin: -16mm -14mm 0 -14mm;
+    padding: 20mm 18mm;
+  }
+  .cover .kicker { font-family: 'IBM Plex Mono', monospace; font-size: 9.5pt; letter-spacing: 3px; text-transform: uppercase; color: #b6acf7; margin-bottom: 12px; }
+  .cover h1 { color: white; font-size: 30pt; margin: 0 0 12px 0; line-height: 1.14; font-weight: 700; }
+  .cover .sub { font-size: 12pt; color: #c8c4e6; max-width: 500px; margin-bottom: 26px; line-height: 1.6; }
+  .cover .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .cover .chip { padding: 6px 13px; border-radius: 20px; font-size: 9pt; font-weight: 600; background: rgba(255,255,255,0.1); color: #e5e1fa; border: 1px solid rgba(255,255,255,0.18); }
+  .cover .consolidates { margin-top: 30px; font-size: 9pt; color: #9a94c4; font-family: 'IBM Plex Mono', monospace; line-height: 1.9; }
+  .cover .consolidates b { color: #cfc9f5; }
+
+  /* ===================== TOC ===================== */
+  .toc { page-break-after: always; }
+  .toc h2 { font-size: 16pt; margin: 6px 0 18px 0; }
+  .toc ol { list-style: none; margin: 0; padding: 0; counter-reset: toc; }
+  .toc li { counter-increment: toc; display: flex; gap: 12px; padding: 7px 0; border-bottom: 1px dashed var(--border); font-size: 10.2pt; }
+  .toc li::before { content: counter(toc); font-family: 'IBM Plex Mono', monospace; font-weight: 700; color: var(--violet); width: 20px; flex-shrink: 0; }
+  .toc .toc-src { margin-left: auto; font-family: 'IBM Plex Mono', monospace; font-size: 7.8pt; color: var(--ink-faint); white-space: nowrap; }
+
+  /* ===================== PART DIVIDER ===================== */
+  .part-divider {
+    page-break-before: always; page-break-after: avoid;
+    margin: 0 0 10px 0; padding: 14px 18px; border-radius: 10px;
+    background: var(--violet-soft); border: 1px solid #cfc7f5;
+  }
+  .part-divider .part-label { font-family: 'IBM Plex Mono', monospace; font-size: 8pt; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--violet-deep); }
+  .part-divider .part-title { font-size: 15pt; font-weight: 700; margin-top: 3px; }
+  .part-divider .part-note { font-size: 8.6pt; color: var(--ink-soft); margin-top: 4px; }
+
+  /* ===================== SECTIONS ===================== */
+  section, .keep-together { page-break-inside: avoid; }
+  .section-title {
+    display: flex; align-items: center; gap: 11px;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 7px; margin: 26px 0 13px 0;
+  }
+  .section-title .badge {
+    background: var(--violet); color: white; width: 25px; height: 25px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'IBM Plex Mono', monospace; font-size: 10.5pt; font-weight: 700; flex-shrink: 0;
+  }
+  .section-title h2 { margin: 0; font-size: 14.5pt; }
+
+  .intro-box, .callout {
+    background: var(--violet-soft); border: 1px solid #cfc7f5; border-radius: 8px;
+    padding: 12px 16px; margin: 12px 0; font-size: 9.7pt; color: var(--ink-soft);
+  }
+  .intro-box b, .callout b { color: var(--ink); }
+
+  /* ===================== ARCHITECTURE IMAGE ===================== */
+  .arch-image { text-align: center; margin: 14px 0; }
+  .arch-image img { max-width: 100%; border: 1px solid var(--border); border-radius: 10px; }
+
+  /* ===================== GENERIC TABLES ===================== */
+  table.filemap, table.glossary, table.trigger-table { width: 100%; border-collapse: collapse; font-size: 9.1pt; margin: 10px 0; }
+  table.filemap th, table.trigger-table th {
+    background: var(--ink); color: white; text-align: left; padding: 7px 9px;
+    font-size: 8.4pt; font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.4px; text-transform: uppercase;
+  }
+  table.filemap td, table.trigger-table td, table.glossary td { border: 1px solid var(--border); padding: 7px 9px; vertical-align: top; }
+  table.filemap td:first-child { font-family: 'IBM Plex Mono', monospace; font-weight: 600; white-space: nowrap; color: var(--violet-deep); }
+  table.filemap tr:nth-child(even) td, table.trigger-table tr:nth-child(even) td { background: var(--surface-2); }
+  table.glossary td:first-child { font-weight: 700; width: 26%; color: var(--ink); white-space: nowrap; }
+
+  .tag { display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 8.3pt; font-weight: 700;
+    padding: 1px 7px; border-radius: 4px; letter-spacing: 0.3px; }
+  .tag.yes { background: var(--add-soft); color: var(--add); border: 1px solid var(--add-border); }
+  .tag.no { background: var(--destroy-soft); color: var(--destroy); border: 1px solid var(--destroy-border); }
+
+  .scope-cols { display: flex; gap: 14px; margin: 14px 0; }
+  .scope-col { flex: 1; border-radius: 8px; padding: 13px 15px; }
+  .scope-managed { background: var(--add-soft); border: 1px solid var(--add-border); }
+  .scope-delegated { background: var(--change-soft); border: 1px solid var(--change-border); }
+  .scope-col .scope-label {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 8.3pt; font-weight: 700;
+    letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 9px;
+  }
+  .scope-managed .scope-label { color: var(--add); }
+  .scope-delegated .scope-label { color: var(--change); }
+  .scope-col .swatch { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  .scope-managed .swatch { background: var(--add); }
+  .scope-delegated .swatch { background: var(--change); }
+  .scope-col ul { margin: 0; padding-left: 16px; font-size: 9.1pt; color: var(--ink-soft); }
+  .scope-col li { margin-bottom: 5px; }
+  .scope-col li b { color: var(--ink); }
+
+  .note { border-radius: 7px; padding: 10px 13px; font-size: 9.2pt; margin: 11px 0; border-left: 4px solid; }
+  .note .note-label { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 7.8pt; font-weight: 700; letter-spacing: 0.7px; text-transform: uppercase; margin-bottom: 3px; }
+  .note.info { background: var(--violet-soft); border-color: var(--violet); }
+  .note.info .note-label { color: var(--violet-deep); }
+  .note.caution { background: var(--change-soft); border-color: var(--change); }
+  .note.caution .note-label { color: var(--change); }
+  .note.takeaway { background: var(--surface-2); border-color: var(--ink); }
+  .note.takeaway .note-label { color: var(--ink); }
+
+  /* ===================== FILE TREE ===================== */
+  .tree-panel { border-radius: 9px; overflow: hidden; background: #17162a; box-shadow: 0 10px 26px rgba(20,15,50,0.18); margin: 12px 0 4px 0; }
+  .tree-bar { display: flex; align-items: center; gap: 6px; padding: 7px 12px; background: rgba(255,255,255,0.05); }
+  .tree-bar .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .tree-bar .r { background: #e5605a; } .tree-bar .y { background: #e7b654; } .tree-bar .g { background: #58c47c; }
+  .tree-bar .tree-title { font-family: 'IBM Plex Mono', monospace; font-size: 7.8pt; color: #8b87ab; margin-left: 6px; }
+  .tree-body { padding: 6px 4px 8px; }
+  .tf-row { display: flex; align-items: baseline; gap: 8px; padding: 2.5px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 8.4pt; }
+  .tf-icon { width: 14px; flex-shrink: 0; text-align: center; font-size: 9pt; }
+  .tf-icon.hcl { color: var(--violet); }
+  .tf-icon.folder { color: #cbc5fb; }
+  .tf-icon.py { font-size: 8pt; }
+  .tf-icon.lock, .tf-icon.state { color: #6b7280; }
+  .tf-icon.plan { color: #6fcf97; }
+  .tf-name { color: #eceafc; flex-shrink: 0; }
+  .tf-use { color: #8b87ab; font-family: 'IBM Plex Sans', Arial, sans-serif; font-size: 8pt; }
+  .tree-caption { font-size: 8.4pt; color: var(--ink-soft); margin: 8px 0 4px 0; }
+
+  /* ===================== STORIES ===================== */
+  .story { border: 1px solid var(--border); border-radius: 7px; padding: 13px 16px; margin-bottom: 13px; page-break-inside: avoid; background: var(--surface); }
+  .story .story-head { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+  .story .story-badge { background: var(--violet); color: white; width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-family: 'IBM Plex Mono', monospace; font-size: 9.5pt; font-weight: 700; }
+  .story h3 { margin: 0; font-size: 10.8pt; }
+  .story p { margin: 4px 0; font-size: 9.4pt; color: var(--ink-soft); }
+  .story .verdict { margin-top: 9px; font-size: 9.1pt; background: var(--add-soft); border-left: 3px solid var(--add); border-radius: 4px; padding: 7px 11px; color: var(--ink); }
+  .story .verdict .result-tag { font-family: 'IBM Plex Mono', monospace; font-size: 7.6pt; font-weight: 700; letter-spacing: 0.6px; color: var(--add); text-transform: uppercase; margin-right: 6px; }
+  .diff-line { font-family: 'IBM Plex Mono', monospace; font-size: 8.6pt; padding: 2px 8px; border-radius: 3px; display: inline-block; margin: 2px 0; }
+  .diff-line.d { background: var(--destroy-soft); color: var(--destroy); }
+
+  /* ===================== MEDALLION FLOW DIAGRAM (Part B) ===================== */
+  .diagram-frame { border: 1px solid #dde2e9; border-radius: 12px; background: #fbfbfd; padding: 22px 20px 16px; margin: 16px 0 18px 0; }
+  .flow-diagram { display: flex; align-items: stretch; gap: 0; flex-wrap: nowrap; }
+  .flow-stage { flex: 1; min-width: 0; border-radius: 9px; padding: 12px 9px 10px; text-align: center; border: 1px solid #d8dde5; position: relative; background: #ffffff; box-shadow: 0 1px 0 rgba(18,33,61,0.04); }
+  .flow-stage .fbadge { width: 26px; height: 26px; border-radius: 50%; margin: 0 auto 7px; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 10.5pt; color: white; }
+  .flow-stage .title { font-weight: 700; font-size: 8.8pt; display: block; color: #12213d; }
+  .flow-stage .sub { font-size: 7.1pt; color: #5a6270; display: block; margin-top: 3px; line-height: 1.4; }
+  .flow-arrow { flex: 0 0 16px; display: flex; align-items: center; justify-content: center; }
+  .flow-arrow svg { width: 14px; height: 10px; }
+  .badge-source { background: #33455e; } .badge-bronze { background: linear-gradient(155deg, #c98a44, #9a5f23); }
+  .badge-silver { background: linear-gradient(155deg, #b7bec9, #7d8492); } .badge-gold { background: linear-gradient(155deg, #e0b23d, #b8860b); }
+  .badge-out { background: #2f6e4c; }
+  .stage-source { border-top: 3px solid #33455e; } .stage-bronze { border-top: 3px solid #b3752c; background: linear-gradient(180deg, #fff, #fbf3e9); }
+  .stage-silver { border-top: 3px solid #8b93a1; background: linear-gradient(180deg, #fff, #f4f5f7); } .stage-gold { border-top: 3px solid #c99a10; background: linear-gradient(180deg, #fff, #fdf7e4); }
+  .stage-out { border-top: 3px solid #2f6e4c; }
+  .flow-stage .src-row { font-size: 7.1pt; color: #444; text-align: left; padding: 1px 0; border-top: 1px dashed #e3e6eb; margin-top: 4px; }
+  .flow-stage .src-row:first-of-type { border-top: none; margin-top: 5px; }
+  .flow-stage .src-row b { color: #12213d; }
+  .decision-pin { position: absolute; top: -9px; right: -9px; width: 19px; height: 19px; border-radius: 50%; background: #12213d; color: white; font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 8.6pt; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
+  .decisions-panel { margin-top: 18px; }
+  .decisions-panel .dp-label { font-family: 'IBM Plex Mono', monospace; font-size: 7.6pt; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #8894a3; margin-bottom: 8px; }
+  .decision-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 16px; }
+  .decision-item { display: flex; gap: 8px; align-items: flex-start; font-size: 8.7pt; color: #333; }
+  .decision-item .dnum { flex-shrink: 0; width: 17px; height: 17px; border-radius: 50%; background: #12213d; color: white; font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 8pt; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+  .decision-item b { color: #12213d; }
+  .flow-legend { display: flex; gap: 16px; font-size: 8.2pt; color: #5a6270; margin-top: 14px; flex-wrap: wrap; border-top: 1px solid #e6e9ee; padding-top: 10px; }
+  .flow-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .swatch2 { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  .support-bands { margin-top: 16px; display: flex; gap: 10px; }
+  .band { flex: 1; padding: 10px 12px; border-radius: 8px; font-size: 8.6pt; border: 1px solid #e6e9ee; background: #fff; }
+  .band .band-label { display: block; font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 7.4pt; letter-spacing: 0.6px; text-transform: uppercase; margin-bottom: 5px; }
+  .band-orch .band-label { color: #a3661a; } .band-mon .band-label { color: #2557a3; } .band-iac .band-label { color: #6b3fb8; }
+  .band p { margin: 0; color: #444; line-height: 1.5; }
+
+  .component { border: 1px solid #e1e5eb; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; page-break-inside: avoid; }
+  .component .comp-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .component .comp-icon { font-size: 15pt; }
+  .component h3 { margin: 0; font-size: 11.5pt; }
+  .component .layer-tag { font-size: 7.5pt; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin-left: auto; }
+  .tag-bronze { background: #cd7f32; color: #2b1400; } .tag-silver { background: #c8ccd4; color: #23262b; }
+  .tag-gold { background: #e6b800; color: #2b2200; } .tag-orch { background: #f2a154; color: #3a1c00; } .tag-support { background: #9aa5b8; color: white; }
+  .component p { margin: 4px 0; font-size: 9.7pt; }
+  .component .analogy { background: #f7f9fb; border-left: 3px solid #4a77ad; padding: 6px 10px; margin-top: 8px; font-size: 9.2pt; font-style: italic; color: #333; }
+  .component .why { margin-top: 6px; font-size: 9.2pt; }
+  .component .why b { color: #12213d; }
+
+  /* ===================== DOCX-DERIVED TABLES (Part A) ===================== */
+  table.plain { width: 100%; border-collapse: collapse; font-size: 8.8pt; margin: 10px 0; }
+  table.plain th { background: #12213d; color: white; text-align: left; padding: 6px 8px; font-size: 8.4pt; }
+  table.plain td { border: 1px solid #d9dee6; padding: 6px 8px; vertical-align: top; }
+  table.plain tr:nth-child(even) td { background: #f7f8fa; }
+  .code-block { background: #f7f8fa; border: 1px solid #d9dee6; border-radius: 6px; padding: 10px 14px; font-family: 'IBM Plex Mono', Consolas, monospace; font-size: 7.6pt; line-height: 1.5; white-space: pre; overflow-x: auto; margin: 10px 0; }
+
+  .footer-note { font-family: 'IBM Plex Mono', monospace; font-size: 7.6pt; color: var(--ink-faint); text-align: center; margin-top: 30px; letter-spacing: 0.3px; }
+</style>
+</head>
+<body>
+
+<!-- ===================== MASTER COVER ===================== -->
+<div class="cover">
+  <div class="kicker">Data Engineering Case Study</div>
+  <h1>Trade Analytics<br>Complete Reference</h1>
+  <div class="sub">Every provisioned object, every dbt model and business rule, a plain-English walkthrough of the whole pipeline, and the full role of Terraform — in one document instead of three.</div>
+  <div class="chip-row">
+    <span class="chip">13 sections</span>
+    <span class="chip">Snowflake &middot; dbt &middot; Airflow &middot; Terraform &middot; AWS S3</span>
+    <span class="chip">Live against a real Snowflake trial account</span>
+  </div>
+  <div class="consolidates">
+    Consolidates <b>Trade_Analytics_Summary.docx</b>, <b>Trade_Analytics_Project_Flow_Explained.pdf</b>,<br>
+    and <b>Trade_Analytics_Terraform_Role_Explained.pdf</b> &mdash; those three are now retired in favor of this one.
+  </div>
+</div>
+
+<!-- ===================== TOC ===================== -->
+<div class="toc">
+<h2>Contents</h2>
+<ol>
+  <li>Architecture at a Glance <span class="toc-src">diagram</span></li>
+  <li>Snowflake &amp; AWS Objects Provisioned <span class="toc-src">was: Summary.docx §1</span></li>
+  <li>dbt Models &amp; Business Rules <span class="toc-src">was: Summary.docx §2</span></li>
+  <li>The GOLD Star Schema, and Why Some Tables Are Permanent <span class="toc-src">was: Summary.docx §2a</span></li>
+  <li>RBAC &amp; Data Masking <span class="toc-src">was: Summary.docx §2b</span></li>
+  <li>Repository Layout &amp; Scripts <span class="toc-src">was: Summary.docx §3</span></li>
+  <li>Pipeline Flow &amp; Connection Details <span class="toc-src">was: Summary.docx §4&ndash;5</span></li>
+  <li>The Big Picture, Plain-English <span class="toc-src">was: Project Flow §1</span></li>
+  <li>Component-by-Component Walkthrough <span class="toc-src">was: Project Flow §2</span></li>
+  <li>Plain-English Glossary <span class="toc-src">was: Project Flow §3</span></li>
+  <li>The Role of Terraform &mdash; What It Manages <span class="toc-src">was: Terraform Role §1</span></li>
+  <li>What Triggers a Terraform Run <span class="toc-src">was: Terraform Role §2</span></li>
+  <li>Why Terraform Is Useful &mdash; In Practice <span class="toc-src">was: Terraform Role §3</span></li>
+</ol>
+</div>
+
+<!-- ===================== 1. ARCHITECTURE AT A GLANCE ===================== -->
+<div class="section-title"><div class="badge">1</div><h2>Architecture at a Glance</h2></div>
+<p>Two kinds of data enter this system &mdash; trades (generated automatically) and daily FX rates (a file someone uploads once a day) &mdash; and flow left to right through a medallion architecture (Bronze &rarr; Silver &rarr; Gold). Two orchestration paths are fully built; only one runs at a time. Terraform and GitHub Actions build and check everything underneath.</p>
+<div class="arch-image"><img src="../Trade_Analytics_Architecture_Flow.png" alt="Trade Analytics architecture diagram"></div>
+
+<!-- ===================== 2. SNOWFLAKE & AWS OBJECTS PROVISIONED ===================== -->
+<div class="section-title"><div class="badge">2</div><h2>Snowflake &amp; AWS Objects Provisioned</h2></div>
+<p>All objects below were provisioned by <code>terraform apply</code> against the live trial account (database TRADE_ANALYTICS), organized as a medallion architecture: BRONZE (raw landing) &rarr; SILVER (staging + business-rule evaluation) &rarr; GOLD (marts + Type 2 SCD snapshot). One object, <code>BRONZE.GENERATE_TRADE_FILES</code>, is deployed by a plain SQL script (<code>terraform/sql/generate_trade_files_procedure.sql</code>) rather than a <code>snowflake_procedure_python</code> resource, keeping its Python body under direct version control in one reviewable file. Everything else is fully Terraform-managed.</p>
+
+<table class="plain">
+<tr><th>Object</th><th>Type</th><th>Schema</th><th>Purpose</th></tr>
+<tr><td>TRADE_ANALYTICS_WH</td><td>Warehouse</td><td>&mdash;</td><td>XSMALL, auto-suspend 60s. Compute for ingestion and dbt.</td></tr>
+<tr><td>TRADE_ANALYTICS</td><td>Database</td><td>&mdash;</td><td>Top-level container for the whole pipeline.</td></tr>
+<tr><td>BRONZE</td><td>Schema</td><td>TRADE_ANALYTICS</td><td>Landing zone: raw trade files, stage, stream, tasks.</td></tr>
+<tr><td>SILVER</td><td>Schema</td><td>TRADE_ANALYTICS</td><td>dbt staging + business-rule evaluation (stg_trades, int_trades_evaluated).</td></tr>
+<tr><td>GOLD</td><td>Schema</td><td>TRADE_ANALYTICS</td><td>dbt star schema: dim_* tables, fct_valid_trades, fct_rejected_trades, fct_trade_status, rpt_trade_report + Type 2 SCD snapshot.</td></tr>
+<tr><td>TRADE_ANALYTICS_LOADER</td><td>Role</td><td>&mdash;</td><td>Used by the standalone Python dev/test script (PUT + COPY INTO).</td></tr>
+<tr><td>TRADE_ANALYTICS_TRANSFORMER</td><td>Role</td><td>&mdash;</td><td>Used by dbt to build every model.</td></tr>
+<tr><td>TRADE_JSON_FORMAT</td><td>File format</td><td>BRONZE</td><td>JSON, one object per line, used by COPY INTO.</td></tr>
+<tr><td>TRADES_STAGE</td><td>Internal stage</td><td>BRONZE</td><td>Trade batch files land here (genuine cloud object storage, Snowflake-managed).</td></tr>
+<tr><td>TRADES_RAW</td><td>Table</td><td>BRONZE</td><td>Insert-only landing table (raw_payload VARIANT, file_name, loaded_at). Permanent, cluster_by=to_date(loaded_at).</td></tr>
+<tr><td>TRADES_RAW_STREAM</td><td>Stream</td><td>BRONZE</td><td>CDC stream on TRADES_RAW; consumed by dbt's stg_trades model.</td></tr>
+<tr><td>GENERATE_TRADE_FILES</td><td>Procedure (Snowpark Python)</td><td>BRONZE</td><td>Generates a mock trade batch, writes it as .jsonl straight to the stage.</td></tr>
+<tr><td>GENERATE_TRADE_FILES_TASK</td><td>Task</td><td>BRONZE</td><td>Calls the procedure every 2 min (configurable). Auto-retries 2x on failure. Currently suspended (cost) &mdash; see observability/task_control.sql.</td></tr>
+<tr><td>INGEST_TRADES_TASK</td><td>Task</td><td>BRONZE</td><td>COPY INTOs new stage files every 5 min (configurable). Independent schedule from generation. Currently suspended (cost).</td></tr>
+<tr><td>TRADE_PIPELINE_ALERT</td><td>Email notification integration</td><td>&mdash;</td><td>Lets Snowflake send email for the alert below.</td></tr>
+<tr><td>TASK_FAILURE_ALERT</td><td>Alert</td><td>BRONZE</td><td>Every 15 min, emails if any of the three tasks failed in TASK_HISTORY. Currently suspended alongside the tasks it watches.</td></tr>
+<tr><td>FX_RATES_S3_INTEGRATION</td><td>Storage integration</td><td>&mdash;</td><td>IAM role trust to S3 &mdash; no long-lived AWS key stored in Snowflake.</td></tr>
+<tr><td>FX_RATES_STAGE</td><td>External stage (S3)</td><td>BRONZE</td><td>Points at s3://&lt;bucket&gt;/fx_rates/ &mdash; manually-uploaded daily rate CSVs land here.</td></tr>
+<tr><td>FX_RATES_CSV_FORMAT</td><td>File format</td><td>BRONZE</td><td>CSV, skip_header=1.</td></tr>
+<tr><td>FX_RATES_RAW</td><td>Table</td><td>BRONZE</td><td>Append-only landing table for daily FX rates (as_of_date, currency, rate_to_usd).</td></tr>
+<tr><td>INGEST_FX_RATES_TASK</td><td>Task</td><td>BRONZE</td><td>COPY INTOs new S3 files once daily (configurable). No PURGE &mdash; IAM policy is read-only and it's the user's own bucket. Currently suspended (cost).</td></tr>
+<tr><td>DASHBOARD_STAGE</td><td>Stage</td><td>GOLD</td><td>Holds the Trade Analytics app file(s) &mdash; content PUT here, same pattern as GENERATE_TRADE_FILES.</td></tr>
+<tr><td>TRADE_ANALYTICS_DASHBOARD</td><td>Streamlit app (Streamlit in Snowflake)</td><td>GOLD</td><td>The trade dashboard, running natively in Snowflake on TRADE_ANALYTICS_WH &mdash; no local process. Viewable in Snowsight (Projects &rarr; Streamlit).</td></tr>
+<tr><td>PIPELINE_HEALTH_STAGE</td><td>Stage</td><td>GOLD</td><td>Holds the separate Pipeline Health app file(s) &mdash; content PUT here, same pattern as GENERATE_TRADE_FILES.</td></tr>
+<tr><td>PIPELINE_HEALTH</td><td>Streamlit app (Streamlit in Snowflake)</td><td>GOLD</td><td>Live pipeline status + task resume/suspend controls, a separate app from the dashboard, running on TRADE_ANALYTICS_WH.</td></tr>
+<tr><td>TRADE_ANALYTICS_ANALYST</td><td>Role</td><td>&mdash;</td><td>Read-only, masked: SELECT on fct_trade_status/rpt_trade_report only (dbt-managed grant).</td></tr>
+<tr><td>TRADE_ANALYTICS_COMPLIANCE</td><td>Role</td><td>&mdash;</td><td>Read-only, unmasked: SELECT on all of GOLD including fct_rejected_trades (dbt-managed grant).</td></tr>
+<tr><td>MASK_NOTIONAL / MASK_COUNTERPARTY</td><td>Masking policy</td><td>GOLD</td><td>dbt-created and dbt-attached (on-run-start hook + post_hook); masks NOTIONAL/NOTIONAL_USD/COUNTERPARTY for any role but TRANSFORMER/COMPLIANCE/ACCOUNTADMIN.</td></tr>
+</table>
+
+<p>AWS side (<code>terraform/aws.tf</code>): an S3 bucket (versioned, encrypted, public access blocked), a read-only IAM policy scoped to the <code>fx_rates/</code> prefix, and the IAM role Snowflake assumes. The role's trust policy needs values Snowflake only generates after the storage integration exists, and the integration needs the role's ARN as input &mdash; resolved in one <code>terraform apply</code> by predicting the role's ARN from account_id + role name (deterministic) rather than the usual two-pass setup.</p>
+
+<p>Both roles are granted to the account user PRAVEENMS91 and given USAGE on the warehouse/database. The transformer role additionally gets CREATE TABLE / CREATE VIEW on SILVER and GOLD, and SELECT on all present-and-future tables/streams in BRONZE. The loader role is scoped narrowly to INSERT/SELECT on TRADES_RAW and READ/WRITE on TRADES_STAGE only. A Task's own ERROR_INTEGRATION property only accepts cloud-messaging integrations (SNS/Pub-Sub/Event Grid), not EMAIL, which is why failure alerting goes through a separate ALERT object instead.</p>
+
+<p>Orchestration is split deliberately across two systems rather than having one do everything: Snowflake Tasks handle ingestion (generation and COPY INTO, on independent minute-level schedules, matching the case study's "Ingestion: Snowflake Native" guidance), and dbt Cloud handles transformation (run/test hourly, snapshot monthly) &mdash; <b>this describes the cloud-native path as originally designed and fully provisioned</b>. dbt Cloud could technically run ingestion too via <code>dbt run-operation</code>, but that would collapse the two tasks' independent cadences into dbt Cloud's hourly schedule and use a transformation tool to run non-dbt SQL &mdash; not done, on purpose. As of this reference, all three ingestion Tasks and the failure alert are suspended and dbt Cloud's own job schedules are switched off, with Airflow running as the sole active trigger instead (see Sections 1, 8, and 11&ndash;12) &mdash; a deliberate, reversible decision to avoid two schedulers racing the same live objects, not a change to how the Snowflake-native path itself is built.</p>
+
+<!-- ===================== 3. DBT MODELS & BUSINESS RULES ===================== -->
+<div class="section-title"><div class="badge">3</div><h2>dbt Models &amp; Business Rules</h2></div>
+<table class="plain">
+<tr><th>Model</th><th>Materialization</th><th>What it does</th></tr>
+<tr><td>base_trades_raw (BRONZE)</td><td>view</td><td>Thin passthrough over TRADES_RAW &mdash; documentation/lineage only, not the actual trades data path.</td></tr>
+<tr><td>base_fx_rates_raw (BRONZE)</td><td>view</td><td>Thin passthrough over FX_RATES_RAW &mdash; this one IS the real source silver.fx_rates builds from.</td></tr>
+<tr><td>stg_trades (SILVER)</td><td>incremental (append), transient</td><td>Flattens raw JSON from the stream into typed columns.</td></tr>
+<tr><td>int_trades_evaluated (SILVER)</td><td>incremental (append), transient</td><td>Single decision point: accepts or rejects each trade message and records why.</td></tr>
+<tr><td>fx_rates (SILVER)</td><td>incremental (merge on as_of_date+currency), transient</td><td>Deduplicates FX_RATES_RAW to one row per date+currency &mdash; the latest loaded value.</td></tr>
+<tr><td>dim_trader / dim_book / dim_counterparty / dim_product / dim_currency (GOLD)</td><td>table, full-refresh, transient</td><td>One row per distinct value ever seen in int_trades_evaluated (accepted or rejected). Surrogate key via dbt_utils.generate_surrogate_key().</td></tr>
+<tr><td>dim_date (GOLD)</td><td>table, full-refresh, transient</td><td>Standard Kimball date dimension via dbt_utils.date_spine() (2024-01-01 to 2031-12-31).</td></tr>
+<tr><td>fct_valid_trades (GOLD)</td><td>incremental (merge on trade_id), transient, cluster_by=maturity_date</td><td>One row per trade_id &mdash; the latest accepted version &mdash; joined out to every dim_* table for surrogate-key FKs.</td></tr>
+<tr><td>fct_rejected_trades (GOLD)</td><td>incremental (append), PERMANENT, cluster_by=maturity_date</td><td>Compliance audit log of every rejected message + reason, with the same dimensional FKs.</td></tr>
+<tr><td>fct_trade_status (GOLD)</td><td>view</td><td>fct_valid_trades + computed ACTIVE/EXPIRED + notional_usd (convert_to_usd macro).</td></tr>
+<tr><td>rpt_trade_report (GOLD)</td><td>view</td><td>Flat reporting layer: fct_trade_status pre-joined to dim_date (trade + maturity date). What the dashboard queries &mdash; no joins needed.</td></tr>
+<tr><td>valid_trades_snapshot (GOLD)</td><td>snapshot, check strategy, PERMANENT</td><td>Type 2 SCD history of fct_valid_trades. Run monthly (1st, 01:00 UTC), not on the hourly job.</td></tr>
+</table>
+
+<p>Why <code>fx_rates</code> exists: Snowflake's COPY INTO treats an edited file re-uploaded under the same name as new rather than overwriting, so a corrected rate file can legitimately create a second row for the same (as_of_date, currency) in FX_RATES_RAW. <code>fx_rates</code> resolves it with the same merge-on-latest pattern as fct_valid_trades &mdash; verified live by deliberately re-uploading an edited rate file and confirming BRONZE kept both rows (for audit) while SILVER showed only the latest.</p>
+
+<!-- ===================== 4. GOLD STAR SCHEMA ===================== -->
+<div class="section-title"><div class="badge">4</div><h2>The GOLD Star Schema, and Why Some Tables Are Permanent</h2></div>
+<p><code>fct_valid_trades</code> and <code>fct_rejected_trades</code> carry a surrogate-key foreign column for every dim_* table (trader_key, book_key, counterparty_key, product_key, currency_key, trade_date_key, maturity_date_key). gold.yml tests every one of those FKs with a relationships test against its dimension's key &mdash; 68 tests total, up from 19 before this redesign. The natural-key text columns (trader, book, counterparty, product_type, currency) are kept on the facts too, alongside the *_key columns &mdash; a deliberate denormalization for a handful of small, fixed-vocabulary codes, so a simple query doesn't have to join every dimension just to read them.</p>
+<p>dbt-snowflake defaults every table/incremental model to TRANSIENT (no Fail-safe storage) unless told otherwise. Most models here leave that default in place &mdash; explicit now, via transient=true &mdash; because they're a pure function of BRONZE (permanent) plus the current dbt SQL: if lost, dbt run regenerates them exactly, so Fail-safe's extra 7-day recovery window would be cost with no benefit. fct_rejected_trades and valid_trades_snapshot are the deliberate exception (transient=false): both are point-in-time compliance records of what business logic decided when a message or a snapshot ran &mdash; if the rules ever change later, replaying BRONZE would apply new rules to old messages and silently rewrite audit history, so these two earn the extra protection a real audit record deserves.</p>
+<p>fct_valid_trades, fct_rejected_trades, and BRONZE.TRADES_RAW carry explicit clustering keys (cluster_by) on maturity_date / to_date(loaded_at) respectively &mdash; illustrative at this project's row count, but aimed at the exact query pattern rpt_trade_report's dashboard filter uses (a maturity-date range). observability/observability_toolkit.sql checks clustering health via SYSTEM$CLUSTERING_INFORMATION() and demonstrates a TEMPORARY table for session-scoped ad-hoc debugging that needs no manual cleanup.</p>
+
+<table class="plain">
+<tr><th>Rule</th><th>Outcome</th></tr>
+<tr><td>Lower version than existing</td><td>REJECTED — reason STALE_VERSION_LOWER_THAN_EXISTING</td></tr>
+<tr><td>Same version as existing</td><td>ACCEPTED — merges in, replacing the row</td></tr>
+<tr><td>Maturity date already in the past</td><td>REJECTED — reason MATURITY_DATE_IN_PAST</td></tr>
+<tr><td>Maturity date passes after acceptance</td><td>fct_trade_status view marks it EXPIRED (computed, not mutated)</td></tr>
+<tr><td>Two versions of one trade in the same batch</td><td>Highest version ACCEPTED; the other REJECTED as SUPERSEDED_IN_BATCH</td></tr>
+<tr><td>Any rejection</td><td>Logged to fct_rejected_trades — append-only audit trail</td></tr>
+</table>
+
+<!-- ===================== 5. RBAC & MASKING ===================== -->
+<div class="section-title"><div class="badge">5</div><h2>RBAC &amp; Data Masking</h2></div>
+<p>Two read-only consumer roles sit alongside the two service roles (LOADER, TRANSFORMER): TRADE_ANALYTICS_COMPLIANCE sees everything in GOLD unmasked, including fct_rejected_trades (the audit log) and the raw fact/dimension tables. TRADE_ANALYTICS_ANALYST sees only fct_trade_status and rpt_trade_report &mdash; not the underlying tables &mdash; with COUNTERPARTY pseudonymized and NOTIONAL/NOTIONAL_USD rounded to the nearest $1M.</p>
+<p>The roles themselves are Terraform-managed (terraform/rbac.tf), but who can select what is managed by dbt: a +grants config in dbt_project.yml grants every GOLD object to COMPLIANCE by default, and the two masked models override that individually to add ANALYST &mdash; deliberately not granted at the folder level, so it can't reach fct_valid_trades directly and read NOTIONAL/COUNTERPARTY unmasked. dbt re-applies these grants on every run via its native grants model config.</p>
+<p>Masking is two Snowflake masking policies (macros/create_masking_policies.sql, created idempotently via an on-run-start hook), each a CASE WHEN CURRENT_ROLE() IN (...) expression, attached via a post_hook on both consumer-facing views. Verified live by connecting as each role: rpt_trade_report returns masked values for ANALYST and real ones for COMPLIANCE, and ANALYST is denied on fct_valid_trades directly &mdash; once secondary roles are turned off (Snowflake sessions default to secondary_roles=ALL, which combines every role granted to a user; this trial account's single user holds every role, so isolating ANALYST's own privileges for testing needs USE SECONDARY ROLES NONE first).</p>
+
+<!-- ===================== 6. REPOSITORY LAYOUT & SCRIPTS ===================== -->
+<div class="section-title"><div class="badge">6</div><h2>Repository Layout &amp; Scripts</h2></div>
+<table class="plain">
+<tr><th>Path</th><th>Purpose</th></tr>
+<tr><td>data_generator/generate_trades.py + load_to_snowflake.py</td><td>Standalone dev/test path (PUT + COPY INTO from a local machine) &mdash; not part of the scheduled production flow.</td></tr>
+<tr><td>data_generator/generate_fx_rates.py</td><td>Generates one CSV per day (realistic day-to-day rate drift, not static) for manual upload to S3 &mdash; not an automated feed.</td></tr>
+<tr><td>terraform/*.tf</td><td>IaC for every Snowflake and AWS object listed in Section 2, including the Tasks and Alert.</td></tr>
+<tr><td>terraform/backend.tf + bootstrap_state_backend.py</td><td>S3 remote state (shared between local applies and CI) + the one-time script that creates the bucket Terraform can't create for itself.</td></tr>
+<tr><td>terraform/sql/generate_trade_files_procedure.sql</td><td>The one Snowflake object deployed outside Terraform &mdash; see Section 2.</td></tr>
+<tr><td>terraform/rbac.tf</td><td>The two consumer roles (ANALYST, COMPLIANCE) + their schema/warehouse/database grants &mdash; see Section 5.</td></tr>
+<tr><td>terraform/pipeline_health.tf</td><td>The Pipeline Health app's own stage, snowflake_streamlit object, and USAGE grant &mdash; a separate app from streamlit.tf's dashboard.</td></tr>
+<tr><td>dbt/trade_analytics/macros/create_masking_policies.sql</td><td>Creates the two masking policies (idempotent, on-run-start hook) &mdash; see Section 5.</td></tr>
+<tr><td>dbt/trade_analytics/models/bronze/sources.yml</td><td>Declares BRONZE as a dbt source &mdash; Terraform + the Snowpark procedure own the actual objects.</td></tr>
+<tr><td>dbt/trade_analytics/models/bronze/base_trades_raw.sql, base_fx_rates_raw.sql</td><td>Thin passthrough views &mdash; see Section 3.</td></tr>
+<tr><td>dbt/trade_analytics/models/silver/stg_trades.sql</td><td>Consumes the BRONZE stream, flattens VARIANT to columns.</td></tr>
+<tr><td>dbt/trade_analytics/models/silver/int_trades_evaluated.sql</td><td>All business-rule logic (accept/reject + reason).</td></tr>
+<tr><td>dbt/trade_analytics/models/silver/fx_rates.sql</td><td>Merge-dedup of FX_RATES_RAW &mdash; see Section 3.</td></tr>
+<tr><td>dbt/trade_analytics/macros/convert_to_usd.sql</td><td>Currency-conversion macro: loops over an FX-rate var to build a CASE expression.</td></tr>
+<tr><td>dbt/trade_analytics/snapshots/valid_trades_snapshot.sql</td><td>Type 2 SCD snapshot of the trade book, run monthly. Permanent table.</td></tr>
+<tr><td>dbt/trade_analytics/models/gold/dim_trader.sql, dim_book.sql, dim_counterparty.sql, dim_product.sql, dim_currency.sql, dim_date.sql</td><td>The six GOLD dimensions &mdash; see Section 4.</td></tr>
+<tr><td>dbt/trade_analytics/models/gold/fct_valid_trades.sql</td><td>Merge-incremental table of current accepted trades, FK'd to every dimension.</td></tr>
+<tr><td>dbt/trade_analytics/models/gold/fct_rejected_trades.sql</td><td>Append-only rejected-trade audit log, FK'd to every dimension. Permanent table.</td></tr>
+<tr><td>dbt/trade_analytics/models/gold/fct_trade_status.sql</td><td>View computing ACTIVE/EXPIRED status + notional_usd. Masked for ANALYST &mdash; see Section 5.</td></tr>
+<tr><td>dbt/trade_analytics/models/gold/rpt_trade_report.sql</td><td>Flat reporting view &mdash; what dashboard/Summary.py queries. Masked for ANALYST &mdash; see Section 5.</td></tr>
+<tr><td>dbt Cloud (external, not a repo file)</td><td>Hourly job: dbt run then dbt test. Separate monthly job: dbt snapshot. Reads/writes this repo via a deploy key (read-write, so the dbt Cloud IDE can branch/commit/push); separate Development and Production environments. Both job schedules are currently switched off &mdash; see Section 2.</td></tr>
+<tr><td>orchestration/airflow/</td><td>Complete Docker Compose Airflow stack (generate &rarr; load &rarr; dbt run &rarr; dbt test, hourly, plus a separate monthly snapshot DAG) &mdash; a fully local control plane against the same cloud Snowflake account. Currently the sole active trigger for the pipeline &mdash; see Sections 8 and 11&ndash;12.</td></tr>
+<tr><td>dashboard/Summary.py + pages/1_Trade_Details.py + common.py + environment.yml</td><td>Multi-page Streamlit report over rpt_trade_report: Summary (KPIs + small charts with dynamic captions, including a trades-by-date volume chart) and Trade Details (full table, per-trade Type 2 SCD history, rejected-trades audit). Runs natively in Snowflake (Streamlit in Snowflake, terraform/streamlit.tf) &mdash; no local process; works locally too (streamlit run) via a Snowpark-session fallback, same code either way.</td></tr>
+<tr><td>observability/Pipeline_Health.py + pipeline_status.py (separate Streamlit app)</td><td>Live end-to-end pipeline status (Task states + TASK_HISTORY, alert state, CDC stream backlog, transform-layer freshness) in one place, plus resume/suspend buttons for every ingestion Task and the alert &mdash; for the primary (Snowflake Tasks + dbt Cloud) path. A separate app from the Trade Analytics dashboard, different audience/concern. The Airflow alternative has its own UI for the same visibility on the fully-local path.</td></tr>
+<tr><td>observability/observability_toolkit.sql</td><td>Ready-to-run debugging, time-travel, optimization and monitoring queries.</td></tr>
+<tr><td>.github/workflows/dbt_ci.yml, terraform_ci.yml</td><td>CI/CD: dbt build/test on PR + merge; terraform fmt/validate/plan on PR, apply on manual dispatch (sequenced after plan to avoid an S3 state-lock race &mdash; both verified live). See Section 12.</td></tr>
+<tr><td>docs/SETUP_GUIDE.md, VALIDATION_LOGIC.md, SCALABILITY.md</td><td>Step-by-step setup, rule-by-rule rationale, and the failure-handling / monitoring / 10,000x-scale write-up.</td></tr>
+</table>
+
+<!-- ===================== 7. PIPELINE FLOW & CONNECTION DETAILS ===================== -->
+<div class="section-title"><div class="badge">7</div><h2>Pipeline Flow &amp; Connection Details</h2></div>
+<div class="code-block">BRONZE                    SILVER                GOLD
+
+GENERATE_TRADE_FILES_TASK (every 2 min)
+      |  CALL BRONZE.GENERATE_TRADE_FILES(...)
+      v
+TRADES_STAGE  (files)
+      ^
+      |  polls
+INGEST_TRADES_TASK (every 5 min) --(COPY INTO)-->  TRADES_RAW
+                                                        |
+                                                  TRADES_RAW_STREAM
+                                                        |
+                                          base_trades_raw (view, lineage only)
+                                                        |
+                                            stg_trades  (dbt Cloud,
+                                                  |      hourly job)
+                                        int_trades_evaluated
+                                              /            \
+                              fct_valid_trades          fct_rejected_trades
+                              (FK'd to dim_trader,       (same FKs, PERMANENT,
+                               dim_book, dim_counter-     compliance audit log)
+                               party, dim_product,
+                               dim_currency, dim_date)
+                                    /        \
+                        fct_trade_status   valid_trades_snapshot
+                        (view, incl.        (Type 2 SCD, PERMANENT,
+                         notional_usd)        dbt Cloud monthly job)
+                              |
+                       rpt_trade_report  (flat, pre-joined --
+                              |            what the dashboard queries)
+                              v
+                    Streamlit dashboard (Streamlit in Snowflake --
+                    filters: trader, book, counterparty, product,
+                    currency, status, maturity range)
+
+Manual upload --> S3 (fx_rates/) --> FX_RATES_STAGE
+                                          |  polls, once daily
+                                          v
+                              INGEST_FX_RATES_TASK --(COPY INTO)--> FX_RATES_RAW
+                                                                        |
+                                                          base_fx_rates_raw (view)
+                                                                        |
+                                                  fx_rates  (merge-dedup, dbt Cloud hourly job)</div>
+<p style="font-size:8.6pt;color:var(--ink-soft);">This diagram shows the cloud-native path (Snowflake Tasks + dbt Cloud) as originally designed. As of this reference, Airflow runs this same generate &rarr; load &rarr; transform sequence instead &mdash; see Sections 1, 8, and 11&ndash;12 for the current live routing.</p>
+
+<h3 style="font-size:11pt; margin-top:18px;">Connection details for this account</h3>
+<table class="plain">
+<tr><th>Item</th><th>Value</th></tr>
+<tr><td>Account URL</td><td>&lt;your-org&gt;-&lt;your-account&gt;.snowflakecomputing.com</td></tr>
+<tr><td>Organization / Account name</td><td>set in your local .env (SNOWFLAKE_ORGANIZATION_NAME / SNOWFLAKE_ACCOUNT_NAME)</td></tr>
+<tr><td>Database</td><td>TRADE_ANALYTICS</td></tr>
+<tr><td>Warehouse</td><td>TRADE_ANALYTICS_WH</td></tr>
+<tr><td>Loader role</td><td>TRADE_ANALYTICS_LOADER</td></tr>
+<tr><td>Transformer role (dbt)</td><td>TRADE_ANALYTICS_TRANSFORMER</td></tr>
+</table>
+<p>Account identifiers and credentials are never stored in this document or in the repository &mdash; they live only in the local, git-ignored .env file. See docs/SETUP_GUIDE.md for how to populate it.</p>
+
+<!-- ===================== PART B DIVIDER ===================== -->
+<div class="part-divider">
+  <div class="part-label">Part B &middot; formerly Trade_Analytics_Project_Flow_Explained.pdf</div>
+  <div class="part-title">The Plain-English Walkthrough</div>
+  <div class="part-note">Sections 8&ndash;10 &mdash; written so it makes sense even if you weren't in the room when it was built.</div>
+</div>
+
+<!-- ===================== 8. THE BIG PICTURE ===================== -->
+<div class="section-title"><div class="badge">8</div><h2>The Big Picture, Plain-English</h2></div>
+<p>Two kinds of data enter this system: <b>trades</b> (generated automatically, every couple of minutes) and <b>daily FX rates</b> (a file someone uploads once a day). Both flow left to right through three "cleanliness" stages &mdash; Bronze, Silver, Gold &mdash; a pattern called a <b>medallion architecture</b>. Each stage only trusts data that has passed the checks of the stage before it, so by the time data reaches Gold, it's safe for a report, a dashboard, or a finance team to rely on.</p>
+
+<div class="diagram-frame">
+<div class="flow-diagram">
+  <div class="flow-stage stage-source">
+    <div class="decision-pin">1</div>
+    <div class="fbadge badge-source">S</div>
+    <span class="title">Sources</span>
+    <div class="src-row"><b>Trade Generator</b> — Snowpark, ~every 2 min</div>
+    <div class="src-row"><b>S3 Upload</b> — FX rates, once daily</div>
+  </div>
+  <div class="flow-arrow"><svg viewBox="0 0 14 10"><path d="M0 5 L11 5 M6 0 L11 5 L6 10" fill="none" stroke="#aab1bd" stroke-width="1.6"/></svg></div>
+  <div class="flow-stage stage-bronze">
+    <div class="decision-pin">2</div>
+    <div class="fbadge badge-bronze">B</div>
+    <span class="title">BRONZE</span>
+    <span class="sub">Raw landing. Nothing checked yet — every row kept, duplicates included, for audit.</span>
+  </div>
+  <div class="flow-arrow"><svg viewBox="0 0 14 10"><path d="M0 5 L11 5 M6 0 L11 5 L6 10" fill="none" stroke="#aab1bd" stroke-width="1.6"/></svg></div>
+  <div class="flow-stage stage-silver">
+    <div class="decision-pin">3</div>
+    <div class="fbadge badge-silver">S</div>
+    <span class="title">SILVER</span>
+    <span class="sub">Cleaned, deduplicated, and every business rule decided — once.</span>
+  </div>
+  <div class="flow-arrow"><svg viewBox="0 0 14 10"><path d="M0 5 L11 5 M6 0 L11 5 L6 10" fill="none" stroke="#aab1bd" stroke-width="1.6"/></svg></div>
+  <div class="flow-stage stage-gold">
+    <div class="decision-pin">4</div>
+    <div class="fbadge badge-gold">G</div>
+    <span class="title">GOLD</span>
+    <span class="sub">Star schema, facts, and a full point-in-time history.</span>
+  </div>
+  <div class="flow-arrow"><svg viewBox="0 0 14 10"><path d="M0 5 L11 5 M6 0 L11 5 L6 10" fill="none" stroke="#aab1bd" stroke-width="1.6"/></svg></div>
+  <div class="flow-stage stage-out">
+    <div class="decision-pin">5</div>
+    <div class="fbadge badge-out">R</div>
+    <span class="title">Reports</span>
+    <span class="sub">Dashboard + monthly snapshot, masked per role.</span>
+  </div>
+</div>
+
+<div class="decisions-panel">
+  <div class="dp-label">Why it's built this way</div>
+  <div class="decision-grid">
+    <div class="decision-item"><span class="dnum">1</span><span><b>Runs natively inside Snowflake.</b> The generator is Snowpark Python, not an external script — no server to babysit, no separate compute bill.</span></div>
+    <div class="decision-item"><span class="dnum">2</span><span><b>Deliberately decoupled schedules.</b> Generation and ingestion run on independent cadences, so Bronze reflects a real, imperfectly-synced upstream feed — not a toy lockstep pipeline.</span></div>
+    <div class="decision-item"><span class="dnum">3</span><span><b>Rules decided once, duplicates defended twice.</b> Accept/reject logic lives in exactly one model, and duplicates are guarded against both at the loader and again at the Bronze→Silver boundary — nothing to drift out of sync, nothing slips through either check.</span></div>
+    <div class="decision-item"><span class="dnum">4</span><span><b>Status computed live, never stored.</b> Active/Expired is worked out fresh on every read — always correct, no job has to "remember" to update it.</span></div>
+    <div class="decision-item"><span class="dnum">5</span><span><b>RBAC split by design.</b> Terraform owns who the roles <i>are</i>; dbt owns what each role can <i>see</i> — so the two never fight over the same grant.</span></div>
+  </div>
+</div>
+
+<div class="flow-legend">
+  <span><span class="swatch2" style="background:#fbf3e9;border:1px solid #b3752c;"></span>Bronze = unfiltered, as-received</span>
+  <span><span class="swatch2" style="background:#f4f5f7;border:1px solid #8b93a1;"></span>Silver = validated, business rules decided</span>
+  <span><span class="swatch2" style="background:#fdf7e4;border:1px solid #c99a10;"></span>Gold = final, ready to use</span>
+</div>
+
+<div class="support-bands">
+  <div class="band band-orch"><span class="band-label">Orchestration</span>Two paths are built; only one runs at a time. <b>Airflow</b> (local, against the same live account) is currently the sole trigger, hourly. <b>Snowflake Tasks + dbt Cloud</b> are fully provisioned as the alternative, currently switched off.</div>
+  <div class="band band-mon"><span class="band-label">Monitoring</span>Airflow emails on any DAG failure (its own SMTP config) — the currently-active path. The Snowflake-native Alert + dbt Cloud's own failure emails exist too, just idle alongside the Tasks they'd watch.</div>
+  <div class="band band-iac"><span class="band-label">Built by</span>Every piece above — warehouses, schemas, tables, tasks, the S3 connection — is defined as code in <b>Terraform</b>, rebuildable from scratch on demand.</div>
+</div>
+</div>
+
+<!-- ===================== 9. COMPONENT WALKTHROUGH ===================== -->
+<div class="section-title"><div class="badge">9</div><h2>Component-by-Component Walkthrough</h2></div>
+<p style="font-size:9.5pt;color:#555;">Read top to bottom — this follows the same left-to-right order as the diagram above.</p>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🏭</span><h3>Trade Generator (Snowpark Procedure)</h3><span class="layer-tag tag-bronze">entry point</span></div>
+  <p>A small Python program that lives <i>inside</i> Snowflake (not on anyone's laptop). Every couple of minutes it invents a batch of realistic-looking trades — new trades, amendments to old ones, the occasional duplicate or already-expired trade thrown in on purpose — and writes them as a file directly into Snowflake's own storage.</p>
+  <div class="why"><b>Why inside Snowflake, not an external script?</b> No separate server to keep running, no laptop that has to stay on, no extra AWS bill for compute — the same warehouse that does everything else runs this too.</div>
+  <div class="analogy">Think of it as a practice dummy at a shooting range: it fires realistic shots (trades) on a schedule so the rest of the system has something real to process, without needing an actual trading desk hooked up.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">📤</span><h3>S3 Upload (Daily FX Rates)</h3><span class="layer-tag tag-bronze">entry point</span></div>
+  <p>A second, independent data source: once a day, someone drops a CSV file of currency exchange rates (e.g. "1 EUR = 1.081 USD") into an Amazon S3 bucket. Snowflake has been given a narrow, read-only key to look into that one folder — nothing more.</p>
+  <div class="why"><b>Why S3 instead of another Snowflake stage?</b> This mirrors how data really arrives in most companies — from a different system entirely, owned by a different team, sitting in cloud storage that isn't Snowflake's. It's a genuinely separate, realistic integration rather than a second copy of the same trick.</div>
+  <div class="analogy">Like a supplier dropping off a box at your loading dock once a day — you don't control when exactly they show up, so you check the dock on a schedule rather than waiting by the door.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🥉</span><h3>BRONZE — Raw Landing</h3><span class="layer-tag tag-bronze">bronze</span></div>
+  <p>Two scheduled jobs (Snowflake "Tasks") move data from where it lands into permanent tables: one checks the internal storage for new trade files every 2 minutes and loads them; another checks the S3 folder once a day for new rate files. Nothing is validated here — Bronze's only job is "get it in, keep a permanent copy, don't lose anything."</p>
+  <div class="why"><b>Why not validate immediately?</b> Keeping raw data as-received, untouched, means you can always re-run everything downstream from scratch if a business rule turns out to be wrong later — you haven't thrown anything away.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🌊</span><h3>The Stream (Change Tracking)</h3><span class="layer-tag tag-bronze">bronze</span></div>
+  <p>A Snowflake "Stream" sits on the raw trades table and remembers exactly which rows are new since the last time something looked. The next stage reads from the stream, not the raw table directly, so it only ever processes new arrivals — never the same trade twice, never a full re-scan of history.</p>
+  <div class="analogy">Like a "new mail" tray instead of the entire filing cabinet — you only look at what's landed since you last checked.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🪟</span><h3>BRONZE's dbt Views</h3><span class="layer-tag tag-bronze">bronze</span></div>
+  <p>Two very simple dbt "models" sit in Bronze too — <code>base_trades_raw</code> and <code>base_fx_rates_raw</code> — each just a plain "show me everything in this raw table" view. They don't clean or filter anything; they exist so Bronze shows up as a real, clickable part of the data lineage diagram instead of an empty gap before Silver.</p>
+  <div class="analogy">Like a reception desk sign that just says "everything received today is in that pile" — it doesn't sort the mail, it just makes the pile visible and pointed-at.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🥈</span><h3>SILVER — Cleaning &amp; Business Rules</h3><span class="layer-tag tag-silver">silver</span></div>
+  <p>This is where the real decision-making happens, in two steps:</p>
+  <p><b>Step 1 — Flatten:</b> raw trade messages arrive as one blob of JSON; this step breaks them out into normal columns (trade ID, version, maturity date, notional amount, currency, and so on).</p>
+  <p><b>Step 2 — Decide:</b> every trade message is checked against the business rules and gets exactly one verdict: <i>accepted</i> or <i>rejected</i>, with a reason recorded either way:</p>
+  <table class="glossary">
+    <tr><td>Older version arrives</td><td>Rejected — a newer version of this trade is already on file, so this one is stale.</td></tr>
+    <tr><td>Same version arrives again</td><td>Accepted — treated as a correction/replay, replaces what's on file.</td></tr>
+    <tr><td>Maturity date already passed</td><td>Rejected — this trade would be born already expired, which isn't valid.</td></tr>
+    <tr><td>Two versions in one batch</td><td>The newer one is accepted; the older one is logged as rejected rather than silently thrown away.</td></tr>
+  </table>
+  <div class="why"><b>Why one single place for all these decisions?</b> If "accept or reject" logic were scattered across several files, they could quietly drift out of sync with each other over time. Having exactly one decision point means there is exactly one place to look, trust, and test.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🧹</span><h3>FX Rates, Deduplicated</h3><span class="layer-tag tag-silver">silver</span></div>
+  <p>Bronze never deletes or overwrites — if someone edits an FX-rate file and re-uploads it under the same name, the system treats it as a brand-new file and keeps <i>both</i> the old and corrected values sitting in Bronze. A Silver step resolves that: it always keeps exactly one row per day per currency — whichever value was loaded most recently — while Bronze quietly holds onto the full history underneath, in case anyone ever needs to see what changed.</p>
+  <div class="analogy">Like a whiteboard that always shows today's number, while a logbook underneath records every correction anyone ever made to it.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🥇</span><h3>GOLD — Business-Ready Tables</h3><span class="layer-tag tag-gold">gold</span></div>
+  <p>Three core tables, each with one clear job:</p>
+  <table class="glossary">
+    <tr><td><code>fct_valid_trades</code></td><td>The current, accepted state of every trade — one row per trade, always the latest version.</td></tr>
+    <tr><td><code>fct_rejected_trades</code></td><td>A permanent audit log of every trade that was turned away and why — needed for compliance, never edited or deleted.</td></tr>
+    <tr><td><code>fct_trade_status</code></td><td>A friendlier view for reporting: adds "Active" or "Expired" (worked out fresh every time it's queried, from today's date vs. the maturity date — not a stored flag that could go stale) and converts each trade's amount into US dollars.</td></tr>
+  </table>
+  <div class="why"><b>Why compute "Expired" on the fly instead of storing it?</b> A trade's expiry status changes automatically as time passes — there's no button anyone presses. Computing it at read-time means it's always correct, with no separate job needed to "remember" to update it.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🗂️</span><h3>The Dimension Tables (Star Schema)</h3><span class="layer-tag tag-gold">gold</span></div>
+  <p>Six small lookup tables sit alongside the two tables above: one each for trader, book, counterparty, product type, currency, and calendar date. Every trade in <code>fct_valid_trades</code>/<code>fct_rejected_trades</code> points at a row in each of these instead of just repeating the plain text — "trader_d" is really a link to a row in the trader lookup table, not just a string typed in six different places.</p>
+  <div class="why"><b>Why bother, if the plain text was already there?</b> This is a standard reporting-database pattern called a <b>star schema</b>. It lets tools double-check that every trade actually points at a <i>real</i> trader/book/counterparty (a "does this link actually go anywhere" test, which this project now runs automatically), and it's the shape most BI/reporting tools expect. The plain-text version is deliberately kept too, side by side, so a simple question doesn't require following the links.</div>
+  <div class="analogy">Like a form with a dropdown list instead of a free-text box: picking "Barclays" from a dropdown guarantees it's a real, known counterparty, rather than trusting that everyone typed the name identically every time.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">📋</span><h3>The Reporting Layer</h3><span class="layer-tag tag-gold">gold</span></div>
+  <p>One more table, <code>rpt_trade_report</code>, flattens everything above into a single, wide table built specifically for reporting: every trade attribute already spelled out as plain text, plus handy extras like "which quarter did this trade mature in" and "how many days until maturity." Nobody using this table has to know the star-schema link structure underneath it at all.</p>
+  <div class="why"><b>Why a separate table just for this?</b> The star schema (previous section) is great for a BI tool that already knows how to follow links, but it's awkward for a quick filter-and-look dashboard. This table exists purely so that job is a single flat query, with no links to follow.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">💱</span><h3>The Currency-Conversion Macro</h3><span class="layer-tag tag-gold">gold</span></div>
+  <p>A small reusable piece of code that turns "this trade is 5 million EUR" into "this trade is about 5.4 million USD," using a table of exchange rates. Instead of writing that conversion logic by hand everywhere it's needed, it's written once and reused — change a rate in one place, and every report using it updates automatically.</p>
+  <div class="analogy">Like a currency converter widget you plug into any spreadsheet, instead of re-typing the conversion formula in every single cell.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🕰️</span><h3>Monthly History Snapshot (Type 2 SCD)</h3><span class="layer-tag tag-gold">gold</span></div>
+  <p><code>valid_trades</code> only ever shows "right now" — it doesn't remember what a trade looked like last month. Once a month, a separate job takes a permanent copy of the current state and files it away with a timestamp, building up a history: "as of the end of January, this trade looked like X; as of the end of February, it looked like Y."</p>
+  <div class="why"><b>Why does this matter?</b> Finance and compliance teams often need to answer "what did our book of trades look like at the end of last month," not just "what does it look like today." Without this, that question is unanswerable once the data has moved on.</div>
+  <div class="analogy">Like a photograph taken on the last day of every month, kept in an album — you can always flip back and see exactly how things looked on that date, even though today looks different.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">⏱️</span><h3>Orchestration — Who Presses "Go"</h3><span class="layer-tag tag-orch">supporting</span></div>
+  <p>Nothing in this pipeline runs because a person clicks a button each time. Two entirely different schedulers are built to run it — but only one is actually switched on at any given moment, on purpose.</p>
+  <p><b>Airflow</b> — running locally, against the same live cloud Snowflake account — is the one currently doing the work: an hourly job generates trades, loads them, and runs dbt's clean/rules/marts logic and tests, plus a separate once-a-month job for the history snapshot.</p>
+  <p><b>Snowflake Tasks + dbt Cloud</b> — a second, independent way of scheduling the exact same work (Tasks for everything before Silver, dbt Cloud for Silver and Gold) — is fully built and ready, just not currently turned on.</p>
+  <div class="why"><b>Why build two and only run one?</b> Two schedulers independently triggering work against the same live data caused a genuine bug once — a duplicate trade slipped in because two systems tried to load the same file around the same time. Running exactly one at a time removes that risk entirely, while keeping the second path ready to switch back on whenever it's needed.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🔔</span><h3>Monitoring &amp; Alerting</h3><span class="layer-tag tag-support">supporting</span></div>
+  <p>Every scheduled job automatically retries itself twice if it fails, and stops trying (rather than failing forever in a loop) after three failed attempts in a row. Whichever scheduler is currently active emails on failure — right now that's Airflow, using its own mail settings; the Snowflake-native "Alert" (checks every 15 minutes) and dbt Cloud's own failure emails are the same safety net for the other path, just idle alongside it. There's also a ready-made library of copy-paste queries for digging into "what happened and why" when something does go wrong.</p>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🧱</span><h3>Infrastructure as Code (Terraform)</h3><span class="layer-tag tag-support">supporting</span></div>
+  <p>Every piece of Snowflake and AWS infrastructure in this system — warehouses, schemas, tables, tasks, the S3 bucket, the permissions connecting them — is written down as code rather than clicked together by hand in a web console. Running one command rebuilds the entire environment from nothing.</p>
+  <div class="why"><b>Why does this matter?</b> If this environment were lost, recreating it by memory/clicking would be slow and error-prone. With it written as code, rebuilding is fast, repeatable, and exactly reproducible — and every change to the infrastructure has a paper trail (it's tracked in version control, just like the code itself).</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🔁</span><h3>CI/CD (Automatic Checks on Every Change)</h3><span class="layer-tag tag-support">supporting</span></div>
+  <p>Whenever a change is proposed to the code, automated checks run before it's allowed to merge: the data transformation logic is tested, and the infrastructure code is validated. Deploying new infrastructure changes to the live environment is a deliberate, manual trigger — not something that happens automatically just because code changed.</p>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🗄️</span><h3>Permanent vs. Disposable Tables, and Sorting the Data Ahead of Time</h3><span class="layer-tag tag-support">supporting</span></div>
+  <p>Snowflake offers a cheaper table option that skips an extra 7-day safety-net backup — fine for anything that can be perfectly regenerated from earlier data, wasteful for anything that can't. Most tables in this pipeline use the cheaper option, since they can always be rebuilt from Bronze. Two are deliberately kept on the full-price option instead: the rejected-trades audit log and the monthly history snapshot — both are a record of "what was decided at the time," which literally cannot be perfectly recreated later if the business rules ever change.</p>
+  <p>Separately, the biggest tables are told to keep themselves roughly sorted by maturity date as new data arrives, so a report asking "trades maturing in the next 90 days" doesn't have to look through the whole table to find them.</p>
+  <div class="why"><b>Why does this matter at such a small scale?</b> It doesn't, yet — this project is far too small to actually need either of these. They're set up anyway, correctly and deliberately, so the choice is documented and ready for the day the data is 10,000x bigger, rather than being retrofitted under pressure later.</div>
+  <div class="analogy">Like paying for extra insurance only on the one filing cabinet that holds originals you could never reprint, and keeping the archive roughly filed by date so nobody has to search box by box.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">📊</span><h3>Dashboard — Live, Inside Snowflake</h3><span class="layer-tag tag-support">supporting</span></div>
+  <p>A web page that queries the reporting table directly and shows, at a glance, how many trades are active vs. expired, and why trades have been rejected recently — with filters down the side (trader, book, counterparty, product, currency, status, and a maturity-date range) so a user can narrow the view to exactly the trades they care about. It's optional and separate from the pipeline itself — it's a consumer of Gold data, not a part of building it. It runs as a <b>Streamlit in Snowflake</b> app: the dashboard's code lives and executes inside Snowflake itself, not on anyone's laptop, so it's always reachable by opening Snowsight rather than something someone has to remember to start.</p>
+  <div class="why"><b>Why does "runs inside Snowflake" matter?</b> A dashboard that only works when a particular laptop has a terminal open isn't really "live" — it's a demo. Running it as a native Snowflake object means it's on the same always-available compute as everything else in this pipeline, with no separate credentials to manage and no separate hosting to keep paying for.</div>
+  <div class="analogy">Like the difference between a report someone has to remember to email out versus a live dashboard on the wall of the trading floor — the second one is just always there.</div>
+</div>
+
+<div class="component">
+  <div class="comp-head"><span class="comp-icon">🔒</span><h3>Who Sees What</h3><span class="layer-tag tag-support">supporting</span></div>
+  <p>Two extra Snowflake roles sit on top of the pipeline, read-only: one for compliance staff, who see every trade and the full rejected-trade audit log with real dollar amounts and real counterparty names; and one for general analysts, who see the same reporting screen but with deal sizes rounded to the nearest $1M and counterparty names replaced with a consistent code — enough to spot patterns and totals without seeing exactly who traded exactly how much. The analyst role also can't reach the underlying raw tables at all, only the reporting screen itself, so there's no side door around the masking.</p>
+  <div class="why"><b>Why mask instead of just hiding the columns?</b> Hiding a column entirely would stop an analyst from doing basic aggregate work — "which product line is biggest this quarter" needs some notional figure to sum. Rounding to the nearest million answers that without exposing one counterparty's exact negotiated price on one specific deal.</div>
+  <div class="analogy">Like a company-wide sales report that shows "~$40M" and "Client 7B80959" instead of the exact contract value and the client's actual name — useful for spotting trends, useless for reverse-engineering someone else's deal.</div>
+</div>
+
+<!-- ===================== 10. GLOSSARY ===================== -->
+<div class="section-title"><div class="badge">10</div><h2>Plain-English Glossary</h2></div>
+<table class="glossary">
+  <tr><td>Medallion architecture</td><td>Organizing data into progressively cleaner stages — Bronze (raw), Silver (validated), Gold (business-ready) — instead of one big undifferentiated pile.</td></tr>
+  <tr><td>Stream (CDC)</td><td>Snowflake's built-in way of tracking "what's new since I last looked," so downstream jobs only process new data, never everything from scratch.</td></tr>
+  <tr><td>Task</td><td>A built-in Snowflake schedule that runs a piece of SQL (or calls a procedure) automatically, on a timer — Snowflake's version of a cron job.</td></tr>
+  <tr><td>Macro</td><td>A reusable, parameterized snippet of code (in dbt) — write the logic once, use it in many places, change it in one place.</td></tr>
+  <tr><td>Type 2 SCD (Slowly Changing Dimension)</td><td>A way of keeping full history instead of only "right now" — every change gets a new row with a start/end date, rather than overwriting the old value.</td></tr>
+  <tr><td>Star schema / Fact &amp; dimension tables</td><td>A standard reporting-database layout: small lookup tables ("dimensions," e.g. traders) linked to a central table of events/records ("facts," e.g. trades) instead of repeating descriptive text everywhere.</td></tr>
+  <tr><td>Clustering key</td><td>A hint telling a table to keep itself roughly sorted by a column that's filtered on often, so queries can skip straight to the relevant portion instead of scanning everything.</td></tr>
+  <tr><td>Storage Integration</td><td>Snowflake's secure way of connecting to a cloud storage bucket (like S3) using a trusted role instead of a stored password/key.</td></tr>
+  <tr><td>IaC (Infrastructure as Code)</td><td>Describing infrastructure (servers, tables, permissions) in code files instead of clicking through a web console, so it's repeatable and version-controlled.</td></tr>
+  <tr><td>CI/CD</td><td>Automated checks and deployments triggered by code changes — "Continuous Integration / Continuous Delivery."</td></tr>
+  <tr><td>Streamlit in Snowflake</td><td>Snowflake's native way of hosting a small data app: the app's code runs inside Snowflake itself, using an existing warehouse for compute, instead of on a separate server someone has to run and pay for.</td></tr>
+  <tr><td>Airflow</td><td>A widely-used, general-purpose job scheduler (not Snowflake-specific) — runs here in a small Docker container on a local machine, currently the one thing actually pressing "go" on this pipeline.</td></tr>
+</table>
+
+<div class="callout">💡 <b>The one-sentence version:</b> Trades and daily FX rates flow in from two different sources, get progressively cleaned and validated through Bronze → Silver → Gold, are watched over by a scheduler with automatic retries and email alerts (Airflow today, with a second Snowflake-native + dbt Cloud path built and ready to swap back in), and the entire environment that makes this possible is written as code so it can be rebuilt on demand.</div>
+
+<!-- ===================== PART C DIVIDER ===================== -->
+<div class="part-divider">
+  <div class="part-label">Part C &middot; formerly Trade_Analytics_Terraform_Role_Explained.pdf</div>
+  <div class="part-title">The Role of Terraform In This Project</div>
+  <div class="part-note">Sections 11&ndash;13 &mdash; what it manages, exactly what triggers it to run, and why it earned its place here.</div>
+</div>
+
+<!-- ===================== 11. WHAT TERRAFORM MANAGES ===================== -->
+<div class="section-title"><div class="badge">11</div><h2>The Role of Terraform — What It Manages</h2></div>
+<div class="intro-box">Terraform is this project's <b>infrastructure-as-code</b> tool: instead of clicking through the Snowflake and AWS consoles to create a warehouse, a table, an S3 bucket, or a permission, every one of those things is described in a text file. Running <code>terraform apply</code> reads those files and makes reality match them — whether that means creating something new, changing something that drifted, or (if a file is deleted) tearing something down.</div>
+
+<p>Two cloud providers, one apply. Terraform doesn't just manage Snowflake objects or just AWS objects — a single <code>terraform apply</code> coordinates both, including a genuinely interlocking piece: the Snowflake storage integration and the AWS IAM role that trusts it depend on <i>each other's</i> generated values (see the story in Section&nbsp;13).</p>
+
+<table class="filemap">
+<tr><th>File</th><th>What it defines</th></tr>
+<tr><td>versions.tf</td><td>Which Terraform version and which provider versions (Snowflake, AWS, Random) this project needs.</td></tr>
+<tr><td>backend.tf</td><td>Where the project's <i>state</i> — Terraform's record of what it created — actually lives: an S3 bucket, not a file on one laptop. This is what lets local runs and CI see the same reality.</td></tr>
+<tr><td>providers.tf</td><td>Configures the Snowflake and AWS connections, including the list of still-in-preview Snowflake resource types this project had to explicitly opt into.</td></tr>
+<tr><td>variables.tf</td><td>Every configurable knob: warehouse size, schedule intervals, the S3 bucket's base name, the alert email address, and more — with sensible defaults.</td></tr>
+<tr><td>main.tf</td><td>The core Snowflake estate: warehouse, database, the three medallion schemas (BRONZE/SILVER/GOLD), roles and their grants, the JSON file format, the internal stage, the raw landing table, and the CDC stream. The transformer role's grant on BRONZE includes <code>CREATE VIEW</code> alongside <code>USAGE</code> — added so dbt can materialize the BRONZE passthrough views described earlier, without granting it <code>CREATE TABLE</code> there too. The raw landing table also carries a <code>cluster_by = ["to_date(loaded_at)"]</code> clustering key — illustrative at this project's row count, matched by the same choice on two dbt-managed GOLD fact tables (<code>cluster_by=['maturity_date']</code>, set in their model config, not Terraform).</td></tr>
+<tr><td>orchestration.tf</td><td>The scheduling layer: the two trade-pipeline Tasks, the email notification integration, and the Alert that watches Task history and emails on failure.</td></tr>
+<tr><td>aws.tf</td><td>The AWS side of the FX-rates integration: the S3 bucket (encrypted, public access blocked), the read-only IAM policy, and the IAM role Snowflake assumes to read it.</td></tr>
+<tr><td>s3_integration.tf</td><td>The Snowflake side of that same integration: the storage integration (the trust relationship itself), the external stage pointing at S3, the CSV file format, the landing table, and the daily ingestion Task.</td></tr>
+<tr><td>streamlit.tf</td><td>The trade dashboard as a native Snowflake object: a stage to hold the app file(s), the <code>snowflake_streamlit</code> resource itself (already GA in this provider version, not a preview feature), and a <code>USAGE</code> grant so the transformer role can open it.</td></tr>
+<tr><td>pipeline_health.tf</td><td>The same stage + <code>snowflake_streamlit</code> + <code>USAGE</code> grant pattern as streamlit.tf, for a second, separate app: Pipeline Health (live Task/alert status and resume/suspend controls). Deliberately its own app rather than a page on the dashboard — a different audience and concern (operational, not business-reporting).</td></tr>
+<tr><td>rbac.tf</td><td>Two read-only consumer roles, <code>TRADE_ANALYTICS_ANALYST</code> and <code>TRADE_ANALYTICS_COMPLIANCE</code>, plus the warehouse/database/schema <code>USAGE</code> grants each needs, and a <code>CREATE MASKING POLICY</code> grant on GOLD to the transformer role. Column-level <b>SELECT</b> grants (who can query which GOLD object) and the masking policies themselves (what a masked role actually sees) are dbt's job, not Terraform's — dbt's <code>grants</code> model config and a <code>create_masking_policies()</code> macro, run via an <code>on-run-start</code> hook.</td></tr>
+<tr><td>outputs.tf</td><td>A handful of values (database name, warehouse name, role names) printed after every apply, for quick confirmation without a separate query.</td></tr>
+</table>
+
+<div class="intro-box">The <code>.tf</code> files above are only part of the folder. Everything else living next to them &mdash; state, locks, variable values, the one non-Terraform script and SQL file &mdash; is what actually makes <code>terraform init</code>/<code>plan</code>/<code>apply</code> work end to end:</div>
+
+<div class="tree-panel">
+<div class="tree-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="tree-title">terraform/</span></div>
+<div class="tree-body">
+<div class="tf-row"><span class="tf-icon folder">&#9656;</span><span class="tf-name">sql/</span><span class="tf-use">the one Snowflake object deployed outside Terraform &mdash; see Section 2</span></div>
+<div class="tf-row"><span class="tf-icon lock">&#8801;</span><span class="tf-name">.terraform.lock.hcl</span><span class="tf-use">pins exact provider versions/checksums &mdash; committed, so CI and every laptop resolve identical providers</span></div>
+<div class="tf-row"><span class="tf-icon hcl">&#9656;</span><span class="tf-name">aws.tf</span></div>
+<div class="tf-row"><span class="tf-icon hcl">&#9656;</span><span class="tf-name">backend.tf</span></div>
+<div class="tf-row"><span class="tf-icon py">&#128013;</span><span class="tf-name">bootstrap_state_backend.py</span><span class="tf-use">one-time script &mdash; creates the S3 bucket state itself lives in, before Terraform exists to manage it</span></div>
+<div class="tf-row"><span class="tf-icon hcl">&#9656;</span><span class="tf-name">main.tf</span></div>
+<div class="tf-row"><span class="tf-icon hcl">&#9656;</span><span class="tf-name">orchestration.tf</span></div>
+<div class="tf-row"><span class="tf-icon hcl">&#9656;</span><span class="tf-name">outputs.tf</span></div>
+<div class="tf-row"><span class="tf-icon hcl">&#9656;</span><span class="tf-name">pipeline_health.tf</span></div>
+<div class="tf-row"><span class="tf-icon hcl">&#9656;</span><span class="tf-name">providers.tf</span></div>
+<div class="tf-row"><span class="tf-icon hcl">&#9656;</span><span class="tf-name">rbac.tf</span></div>
+<div class="tf-row"><span class="tf-icon hcl">&#9656;</span><span class="tf-name">s3_integration.tf</span></div>
+<div class="tf-row"><span class="tf-icon hcl">&#9656;</span><span class="tf-name">streamlit.tf</span></div>
+<div class="tf-row"><span class="tf-icon state">&#8801;</span><span class="tf-name">terraform.tfstate</span><span class="tf-use">unused placeholder &mdash; real state lives in the S3 backend (backend.tf), not on disk</span></div>
+<div class="tf-row"><span class="tf-icon state">&#8801;</span><span class="tf-name">terraform.tfstate.backup</span><span class="tf-use">Terraform's automatic backup of the previous state, written before every state-changing run</span></div>
+<div class="tf-row"><span class="tf-icon hcl">&#9656;</span><span class="tf-name">terraform.tfvars</span><span class="tf-use">the real values for this deployment (grantee_user, alert_email, warehouse size&hellip;) &mdash; gitignored</span></div>
+<div class="tf-row"><span class="tf-icon state">&#8801;</span><span class="tf-name">terraform.tfvars.example</span><span class="tf-use">the committed template a fresh clone actually starts from &mdash; safe placeholder values only</span></div>
+<div class="tf-row"><span class="tf-icon plan">&#8801;</span><span class="tf-name">tfplan</span><span class="tf-use">a saved <code>plan -out=tfplan</code> &mdash; a frozen plan <code>apply tfplan</code> can execute exactly, without re-planning</span></div>
+<div class="tf-row"><span class="tf-icon hcl">&#9656;</span><span class="tf-name">variables.tf</span></div>
+<div class="tf-row"><span class="tf-icon hcl">&#9656;</span><span class="tf-name">versions.tf</span></div>
+</div>
+</div>
+<div class="tree-caption">Rows with no note are the <code>.tf</code> files already covered in the table above. <code>sql/generate_trade_files_procedure.sql</code> holds the Snowpark Python body of <code>BRONZE.GENERATE_TRADE_FILES</code> &mdash; run once by hand, kept as one plain, reviewable file instead of embedded in HCL. <code>.terraform/</code> (the provider-binary cache <code>init</code> downloads into) and the state/plan files above are all gitignored &mdash; only the <code>.tf</code> files, <code>.terraform.lock.hcl</code>, <code>terraform.tfvars.example</code>, and <code>sql/</code> are committed.</div>
+
+<div class="scope-cols">
+  <div class="scope-col scope-delegated">
+    <div class="scope-label"><span class="swatch"></span>Delegated to a purpose-built tool</div>
+    <ul>
+      <li><b>BRONZE.GENERATE_TRADE_FILES</b> (the Snowpark procedure) — deployed via a plain SQL script (<code>terraform/sql/</code>) instead of a Terraform resource, so its Python body stays under direct version control in one reviewable file.</li>
+      <li><b>The state backend bucket itself</b> — bootstrapped once via a small Python script, before the regular apply flow exists to manage it: Terraform's state has to live somewhere before Terraform can track that somewhere.</li>
+      <li><b>dbt Cloud</b> — jobs, environments, and the Snowflake connection on the dbt Cloud side are managed through dbt Cloud's own API, the tool purpose-built for scheduling and running dbt itself.</li>
+      <li><b>The BRONZE passthrough views</b> (<code>base_trades_raw</code>, <code>base_fx_rates_raw</code>) and the <code>silver.fx_rates</code> merge-dedup model — these are dbt models, not Terraform resources. Terraform's role stops at granting the transformer role permission to create them (see the <code>CREATE VIEW</code> grant above); dbt owns the SQL.</li>
+      <li><b>The Streamlit apps' file content</b> (<code>Summary.py</code>, <code>common.py</code>, <code>pages/1_Trade_Details.py</code>, <code>Pipeline_Health.py</code>, <code>environment.yml</code>) — the <code>.tf</code> files register the app objects and the stages they live on; the files themselves are pushed via a one-time <code>PUT</code>, the same pattern used for <code>GENERATE_TRADE_FILES</code>' Python body — application code stays in application files, not embedded in HCL.</li>
+      <li><b>The masking policies and who can query what</b> (dbt's <code>grants</code> model config, <code>macros/create_masking_policies.sql</code>) — <code>rbac.tf</code> makes the two consumer roles exist and grants the transformer role permission to create masking policies; dbt owns the SELECT grants and the masking logic itself, since both change every time a model's access story changes, not on Terraform's schedule.</li>
+    </ul>
+  </div>
+  <div class="scope-col scope-managed">
+    <div class="scope-label"><span class="swatch"></span>Owned by Terraform</div>
+    <ul>
+      <li>All Snowflake objects: warehouse, database, schemas, roles, grants, stages, file formats, tables, stream, tasks, alert, notification integration, storage integration, both Streamlit app objects.</li>
+      <li>All AWS objects: S3 bucket + its security settings, IAM policy, IAM role.</li>
+      <li>The connective tissue between them — the exact permission boundary letting Snowflake read (and only read) one S3 prefix.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ===================== 12. WHAT TRIGGERS A TERRAFORM RUN ===================== -->
+<div class="section-title"><div class="badge">12</div><h2>What Triggers a Terraform Run</h2></div>
+<p>There are two very different ways Terraform runs in this project — by hand, and via GitHub Actions — and they answer different questions.</p>
+
+<table class="trigger-table">
+<tr><th>Trigger</th><th>Runs what</th><th>Applies changes?</th><th>Why</th></tr>
+<tr>
+  <td><b>Local:</b> a developer runs <code>terraform plan</code> / <code>apply</code> by hand</td>
+  <td>Whatever command was typed</td>
+  <td><span class="tag yes">yes, if apply</span></td>
+  <td>Day-to-day development — building and testing new infrastructure changes before they're even committed.</td>
+</tr>
+<tr>
+  <td><b>CI:</b> a Pull Request touching <code>terraform/**</code></td>
+  <td><code>fmt -check</code>, <code>init</code>, <code>validate</code>, <code>plan</code></td>
+  <td><span class="tag no">no</span></td>
+  <td>Catches syntax errors, drift, and shows <i>exactly</i> what a merge would change — before anyone approves it.</td>
+</tr>
+<tr>
+  <td><b>CI:</b> a push to <code>main</code> touching <code>terraform/**</code></td>
+  <td>Same as above (plan only)</td>
+  <td><span class="tag no">no</span></td>
+  <td>A safety net even after merge — confirms the merged code still plans cleanly.</td>
+</tr>
+<tr>
+  <td><b>CI:</b> manual dispatch (the "Run workflow" button, or <code>gh workflow run</code>)</td>
+  <td><code>validate</code> first, then <code>apply</code> — sequenced so they don't run at the same time</td>
+  <td><span class="tag yes">yes</span></td>
+  <td>The only path that actually changes live infrastructure from CI — a deliberate, human-triggered action, not an automatic side effect of merging.</td>
+</tr>
+</table>
+
+<div class="note info"><span class="note-label">Note</span>Path filtering matters. Both PR and push triggers are scoped to <code>paths: ["terraform/**"]</code> — a commit that only touches <code>docs/</code> or <code>dbt/</code> won't trigger this workflow at all. That's expected behavior, not a bug: it's exactly why, while fixing this workflow, verifying the fix required manually dispatching it rather than waiting for a matching push.</div>
+
+<div class="note caution"><span class="note-label">Caution</span>Why apply is never automatic on push. Provisioning warehouses, roles, and cloud storage on every merge to <code>main</code> is more blast radius than this project needs. <code>apply</code> is one click away (or one <code>gh workflow run</code> away) once a plan has been reviewed — but it's never a surprise side effect of someone else's unrelated commit. GitHub Actions also runs a second, independent workflow (<code>dbt_ci.yml</code>) that builds/tests the dbt project on every PR and merge — it doesn't route through Terraform at all, see the architecture diagram in Section 1.</div>
+
+<!-- ===================== 13. WHY TERRAFORM IS USEFUL ===================== -->
+<div class="section-title"><div class="badge">13</div><h2>Why It's Useful — In Practice, Not Theory</h2></div>
+<p>Three moments from actually building this project make the case better than a generic list of Terraform's benefits would.</p>
+
+<div class="story">
+  <div class="story-head"><div class="story-badge">1</div><h3>The plan that caught a near-miss before it happened</h3></div>
+  <p>Midway through renaming the schemas to BRONZE/SILVER/GOLD, a routine <code>terraform plan</code> came back showing all three schemas — the ones holding every trade, every rejected message, all the currently-loaded data — marked <code>must be replaced</code>. A single missing setting (<code>is_transient</code>) had drifted between what was actually in Snowflake and what the config said, and Terraform's default behavior for that particular attribute is destroy-then-recreate.</p>
+  <div class="diff-line d"># snowflake_schema.schemas["BRONZE"] must be replaced</div>
+  <div class="verdict"><span class="result-tag">Caught by plan</span>Because <code>plan</code> shows every intended action <i>before</i> anything happens, this was caught and fixed with one line of config — instead of discovering it the hard way, after <code>apply</code> had already dropped three schemas.</div>
+</div>
+
+<div class="story">
+  <div class="story-head"><div class="story-badge">2</div><h3>Local and CI disagreeing about what already existed</h3></div>
+  <p>Early on, the GitHub Actions <code>apply</code> job failed with errors like <i>"a policy called snowflake-fx-rates-read-policy already exists."</i> The workflow checked out a fresh copy of the repository with no memory of what earlier local <code>apply</code> runs had already built, so it tried to create everything again from scratch and collided with itself.</p>
+  <div class="verdict"><span class="result-tag">Fixed with shared state</span>A shared, remote state backend (S3) instead of a local file. It's the same principle as a shared calendar instead of everyone keeping their own: local runs and CI now check the same source of truth before touching anything, and a locking mechanism stops two runs from writing to it at the same moment (verified live — it correctly blocked a second concurrent run rather than corrupting anything).</div>
+</div>
+
+<div class="story">
+  <div class="story-head"><div class="story-badge">3</div><h3>Solving a chicken-and-egg problem in one step</h3></div>
+  <p>Snowflake's connection to the S3 bucket needs an AWS IAM role that trusts it — but that role's trust policy needs an ID that Snowflake only generates <i>after</i> the connection exists, and the connection needs the role's address as an input. Neither can go first.</p>
+  <div class="verdict"><span class="result-tag">Resolved in one apply</span>The role's AWS address is predictable ahead of time (account ID + role name), so the Snowflake side could be created first using that predicted address, and the AWS role's trust policy was then filled in with the values Snowflake generated — all figured out automatically from the dependencies written in the config, not manually sequenced by hand.</div>
+</div>
+
+<div class="note takeaway"><span class="note-label">The common thread</span>In all three cases, the value wasn't "Terraform makes infrastructure faster to create" — it was that the plan, the shared state, and the dependency graph each independently prevented a real mistake that manual console clicks would not have caught in the same way.</div>
+
+<div class="footer-note">TRADE ANALYTICS — DATA ENGINEERING CASE STUDY — COMPLETE REFERENCE, CONSOLIDATING SUMMARY.DOCX + PROJECT_FLOW_EXPLAINED.PDF + TERRAFORM_ROLE_EXPLAINED.PDF</div>
+
+</body>
+</html>
