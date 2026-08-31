@@ -13,6 +13,7 @@ Runs two ways with the same code -- see common.get_session():
      dashboard/requirements.txt and a populated .env).
 """
 
+import pandas as pd
 import plotly.express as px
 import streamlit as st
 
@@ -100,6 +101,33 @@ with row2_right:
         top_reason = rejected_summary_df.iloc[0]
         reason_pct = top_reason["REJECT_COUNT"] / rejected_summary_df["REJECT_COUNT"].sum() * 100
         st.caption(f"{top_reason['REJECT_REASON']} is the top reason ({reason_pct:.0f}% of all rejects).")
+
+st.divider()
+
+# --- Trades by date ----------------------------------------------------
+# trade_date (the business booking date), not processed_at: every trade
+# currently valid was last processed/merged very recently (fct_valid_trades'
+# incremental merge sets processed_at = current_timestamp() on each touch),
+# so a processed_at bar chart would just be one flat bar today. trade_date
+# instead shows the actual daily volume trend -- including the historical
+# backfill's steady baseline vs. the live pipeline's ramp on the most recent
+# day(s), which is the more useful signal here.
+st.markdown("**Trades by date**")
+by_day = (
+    filtered_df.assign(TRADE_DAY=pd.to_datetime(filtered_df["TRADE_DATE"]).dt.date)
+    .groupby("TRADE_DAY")
+    .size()
+    .reset_index(name="count")
+    .sort_values("TRADE_DAY")
+)
+fig = px.bar(by_day, x="TRADE_DAY", y="count", height=CHART_HEIGHT)
+fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), xaxis_title=None, yaxis_title="Trades")
+st.plotly_chart(fig, use_container_width=True)
+busiest_day = by_day.loc[by_day["count"].idxmax()]
+st.caption(
+    f"{len(by_day)} day(s) in view. Busiest: "
+    f"{busiest_day['TRADE_DAY']} with {int(busiest_day['count']):,} trades."
+)
 
 st.divider()
 st.page_link("pages/1_Trade_Details.py", label="Open Trade Details ->", icon="📄")

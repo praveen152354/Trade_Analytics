@@ -1,0 +1,6 @@
+product_type,product_name,asset_class,trade_date_meaning,maturity_date_meaning,notes
+FX_SPOT,FX Spot,FX,Deal execution date,T+1 or T+2 settlement date,Very short gap -- maturity here is really just settlement
+FX_FORWARD,FX Forward,FX,Deal execution date,Agreed future settlement date -- days to years out,The trade-to-maturity gap is the whole point of the product
+IRS,Interest Rate Swap,Rates,Execution/trade date,Swap termination date -- often 1-30 years out,Long-dated with periodic reset/payment dates in between -- not just one cash flow
+FX_OPTION,FX Option,FX,Trade date,Expiry date -- when the option can be or is exercised,Exercise style (American/European) affects whether maturity is the last exercisable date or a single date
+BOND,Bond,Rates,Trade (transaction) date,The bond's fixed maturity date -- coupon and principal redemption,A fixed attribute of the bond itself -- not negotiated per trade; every trade on the same CUSIP/ISIN shares one maturity date

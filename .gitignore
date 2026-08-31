@@ -19,8 +19,8 @@ dbt/trade_analytics/logs/
 # Terraform
 terraform/.terraform/
 terraform/*.tfstate*
-terraform/.terraform.lock.hcl
 terraform/crash.log
+terraform/tfplan
 
 # Generated trade data / FX rate files (for manual S3 upload -- see data_generator/generate_fx_rates.py)
 data_generator/output/*.jsonl

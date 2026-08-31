@@ -44,7 +44,11 @@ models:
           - unique
 
   - name: dim_product
-    description: One row per distinct product type ever seen on an inbound trade message.
+    description: >
+      One row per distinct product type ever seen on an inbound trade
+      message, enriched with static reference data (seeds/product_reference.csv)
+      describing what trade_date/maturity_date actually mean for that
+      product -- see that seed's docs for why it's a left join.
     columns:
       - name: product_key
         data_tests:
@@ -54,6 +58,16 @@ models:
         data_tests:
           - not_null
           - unique
+      - name: product_name
+        description: Human-readable label (e.g. "Interest Rate Swap" for IRS). Null if product_reference hasn't been updated for this product_type yet.
+      - name: asset_class
+        description: Broad taxonomy bucket (FX, Rates, Credit, Equity, Commodities).
+      - name: trade_date_meaning
+        description: What trade_date represents for this product.
+      - name: maturity_date_meaning
+        description: What maturity_date represents for this product.
+      - name: notes
+        description: The gotcha worth knowing when reading trade_date/maturity_date for this product.
 
   - name: dim_currency
     description: >

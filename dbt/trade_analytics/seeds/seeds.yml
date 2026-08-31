@@ -1,0 +1,29 @@
+version: 2
+
+seeds:
+  - name: product_reference
+    description: >
+      Static reference data, not generated data -- what trade_date and
+      maturity_date actually mean for each product type, and which asset
+      class it belongs to. One row per product_type the data generator
+      currently emits (data_generator/generate_trades.py's PRODUCT_TYPES).
+      Left-joined into dim_product; a product_type the generator starts
+      emitting before this seed is updated for it still gets a dimension
+      row, just with null descriptive columns instead of silently
+      disappearing.
+    columns:
+      - name: product_type
+        description: Natural key. Matches the product_type values on inbound trade messages.
+        data_tests:
+          - not_null
+          - unique
+      - name: product_name
+        description: Human-readable label (e.g. "Interest Rate Swap" for IRS).
+      - name: asset_class
+        description: Broad taxonomy bucket (FX, Rates, Credit, Equity, Commodities).
+      - name: trade_date_meaning
+        description: What trade_date represents for this product.
+      - name: maturity_date_meaning
+        description: What maturity_date represents for this product.
+      - name: notes
+        description: The gotcha worth knowing when reading trade_date/maturity_date for this product.
